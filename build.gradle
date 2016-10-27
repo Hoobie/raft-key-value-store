@@ -1,14 +1,19 @@
-group 'pl.edu.agh'
-version '1.0-SNAPSHOT'
-
-apply plugin: 'java'
-
-sourceCompatibility = 1.8
-
-repositories {
-    mavenCentral()
+allprojects {
+    apply plugin: 'java'
+    group = 'pl.edu.agh'
+    version = '1.0-SNAPSHOT'
 }
 
-dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.11'
+subprojects {
+
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        testCompile group: 'junit', name: 'junit', version: '4.11'
+    }
 }
