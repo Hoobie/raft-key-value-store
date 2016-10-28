@@ -1,3 +1,4 @@
 dependencies {
+    compile project(':common')
     compile group: 'io.reactivex', name: 'rxnetty-tcp', version: '0.5.2-rc.4'
 }
