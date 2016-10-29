@@ -21,8 +21,11 @@ public class Client {
         TcpClient.newClient(serverAddress)
                 .enableWireLogging("client", LogLevel.DEBUG)
                 .createConnectionRequest()
-                .flatMap(connection -> connection.writeString(Observable.just("Hello World!")).cast(ByteBuf.class))
+                .flatMap(connection -> connection.writeStringAndFlushOnEach(Observable.just("Hello World!"))
+                        .cast(ByteBuf.class)
+                        .concatWith(connection.getInput()))
                 .map(byteBuf -> byteBuf.toString(Charset.defaultCharset()))
+                .first()
                 .toBlocking()
                 .forEach(LOGGER::info);
     }
