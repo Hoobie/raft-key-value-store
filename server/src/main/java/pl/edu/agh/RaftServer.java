@@ -59,7 +59,7 @@ public class RaftServer {
         return TcpServer.newServer(port)
                 .enableWireLogging("server", LogLevel.DEBUG)
                 .start(connection -> connection.writeStringAndFlushOnEach(connection.getInput()
-                        .map(bb -> bb.toString(Charset.defaultCharset()))
+                        .map(byteBuf -> byteBuf.toString(Charset.defaultCharset()))
                         .doOnNext(msg -> LOGGER.info("Received: " + msg))
                         .map(msg -> "echo -> " + msg)));
     }
@@ -86,7 +86,7 @@ public class RaftServer {
         // TODO: check state and perform proper action
         LOGGER.info("Timed out");
 
-        serverConnections.forEach((a, c) -> c.writeString(Observable.just("Hello World!"))
+        serverConnections.forEach((address, connection) -> connection.writeString(Observable.just("Hello World!"))
                 .toBlocking()
                 .first());
     }

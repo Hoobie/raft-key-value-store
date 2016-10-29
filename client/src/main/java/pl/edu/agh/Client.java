@@ -22,7 +22,7 @@ public class Client {
                 .enableWireLogging("client", LogLevel.DEBUG)
                 .createConnectionRequest()
                 .flatMap(connection -> connection.writeString(Observable.just("Hello World!")).cast(ByteBuf.class))
-                .map(b -> b.toString(Charset.defaultCharset()))
+                .map(byteBuf -> byteBuf.toString(Charset.defaultCharset()))
                 .toBlocking()
                 .forEach(LOGGER::info);
     }
