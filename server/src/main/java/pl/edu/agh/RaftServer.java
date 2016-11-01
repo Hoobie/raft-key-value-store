@@ -11,7 +11,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.edu.agh.messages.DummyMessage;
-import pl.edu.agh.messages.Message;
+import pl.edu.agh.messages.RaftMessage;
 import pl.edu.agh.messages.RequestVote;
 import pl.edu.agh.messages.VoteResponse;
 import pl.edu.agh.util.MessageUtil;
@@ -91,7 +91,7 @@ public class RaftServer {
         return tcpServer;
     }
 
-    private Optional<Message> handleRequest(Object obj) {
+    private Optional<RaftMessage> handleRequest(Object obj) {
         return Match(obj).of(
                 Case(instanceOf(RequestVote.class), (RequestVote rv) -> {
                     boolean granted = false;

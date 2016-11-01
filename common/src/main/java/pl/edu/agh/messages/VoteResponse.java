@@ -1,6 +1,6 @@
 package pl.edu.agh.messages;
 
-public class VoteResponse implements Message {
+public class VoteResponse implements RaftMessage {
     public boolean granted;
     // TODO: add term
 

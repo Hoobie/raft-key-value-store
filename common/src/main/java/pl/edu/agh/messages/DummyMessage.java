@@ -1,4 +1,4 @@
 package pl.edu.agh.messages;
 
-public class DummyMessage implements Message {
+public class DummyMessage implements RaftMessage {
 }
