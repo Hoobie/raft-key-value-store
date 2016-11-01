@@ -60,9 +60,8 @@ public class RaftServer {
 
     public static void main(final String[] args) {
         Pair<String, Integer> localAddress = SocketAddressUtils.splitHostAndPort(args[0]);
-        RaftServer server = new RaftServer(localAddress.getLeft(), localAddress.getRight(),
+        new RaftServer(localAddress.getLeft(), localAddress.getRight(),
                 ArrayUtils.subarray(args, 1, args.length));
-        server.awaitShutdown();
     }
 
     public RaftServer(String host, int port, String... serversHostsAndPorts) {
@@ -78,6 +77,10 @@ public class RaftServer {
                 .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
 
         timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
+    }
+
+    public State getState() {
+        return state;
     }
 
     private TcpServer<ByteBuf, ByteBuf> createTcpServer(int port) {
@@ -170,10 +173,6 @@ public class RaftServer {
 
     private boolean isMajority(int votesCount) {
         return votesCount > serverConnections.size() / 2;
-    }
-
-    private void awaitShutdown() {
-        tcpServer.awaitShutdown();
     }
 
     private void handleTimeout() {
