@@ -1,4 +1,6 @@
-package pl.edu.agh.messages;
+package pl.edu.agh.messages.election;
+
+import pl.edu.agh.messages.RaftMessage;
 
 import java.net.SocketAddress;
 
