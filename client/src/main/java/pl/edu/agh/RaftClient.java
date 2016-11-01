@@ -13,9 +13,9 @@ import rx.Observable;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
-public class Client {
+public class RaftClient {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Client.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(RaftClient.class);
 
     public static void main(String[] args) {
         SocketAddress serverAddress = new InetSocketAddress(12345);
