@@ -10,10 +10,7 @@ import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import pl.edu.agh.messages.DummyMessage;
-import pl.edu.agh.messages.RaftMessage;
-import pl.edu.agh.messages.RequestVote;
-import pl.edu.agh.messages.VoteResponse;
+import pl.edu.agh.messages.*;
 import pl.edu.agh.util.MessageUtil;
 import pl.edu.agh.util.SocketAddressUtil;
 import rx.Observable;
@@ -37,8 +34,9 @@ import static pl.edu.agh.util.ThreadUtil.sleep;
 
 public class RaftServer {
 
-    private static final int MIN_TIMEOUT_MILLIS = 150;
-    private static final int MAX_TIMEOUT_MILLIS = 300;
+    private static final int MIN_ELECTION_TIMEOUT_MILLIS = 150;
+    private static final int MAX_ELECTION_TIMEOUT_MILLIS = 300;
+    private static final int HEARTBEAT_TIMEOUT_MILLIS = 100;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RaftServer.class);
 
@@ -53,7 +51,7 @@ public class RaftServer {
     private int currentTerm = 0;
     private AtomicInteger votesCount = new AtomicInteger(0);
     private SocketAddress votedFor;
-    private ScheduledFuture electionTimeout;
+    private ScheduledFuture timeout;
 
     public static void main(final String[] args) {
         Pair<String, Integer> localAddress = SocketAddressUtil.splitHostAndPort(args[0]);
@@ -74,14 +72,13 @@ public class RaftServer {
                 })
                 .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
 
-        electionTimeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateTimeout(), TimeUnit.MILLISECONDS);
+        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
     }
 
     private TcpServer<ByteBuf, ByteBuf> createTcpServer(int port) {
         TcpServer<ByteBuf, ByteBuf> tcpServer = TcpServer.newServer(port);
         tcpServer.enableWireLogging("server", LogLevel.DEBUG)
                 .start(connection -> connection.writeBytesAndFlushOnEach(connection.getInput()
-                        .doOnNext(msg -> LOGGER.info("Received a message"))
                         .map(MessageUtil::toObject)
                         .map(this::handleRequest)
                         .filter(Optional::isPresent)
@@ -93,13 +90,21 @@ public class RaftServer {
 
     private Optional<RaftMessage> handleRequest(Object obj) {
         return Match(obj).of(
-                Case(instanceOf(RequestVote.class), (RequestVote rv) -> {
+                Case(instanceOf(RequestVote.class), rv -> {
                     boolean granted = false;
                     if (votedFor == null || true /*FIXME: check term and being up-to-date*/) {
                         votedFor = rv.candidateAddress;
                         granted = true;
                     }
                     VoteResponse response = new VoteResponse(granted);
+                    return Optional.of(response);
+                }),
+                Case(instanceOf(AppendEntries.class), ae -> {
+                    // TODO: check content and perform proper actions
+                    // for now it is only a heartbeat
+                    AppendEntriesResponse response = new AppendEntriesResponse();
+                    timeout.cancel(false);
+                    timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                     return Optional.of(response);
                 }),
                 Case(instanceOf(DummyMessage.class), Optional::of),
@@ -131,16 +136,21 @@ public class RaftServer {
 
     private void handleResponse(Object obj) {
         Match(obj).of(
-                Case(instanceOf(VoteResponse.class), (VoteResponse vr) -> {
+                Case(instanceOf(VoteResponse.class), vr -> {
                     LOGGER.info("Received VoteResponse");
                     if (vr.granted && isMajority(votesCount.incrementAndGet())) {
                         LOGGER.info("Server {} became a leader", localAddress.toString());
                         state = State.LEADER;
                         votedFor = null;
                         votesCount = new AtomicInteger(0);
-                        electionTimeout.cancel(false);
-                        // TODO: send heartbeats
+                        timeout.cancel(false);
+                        timeout = TIMEOUT_EXECUTOR.scheduleAtFixedRate(this::handleTimeout, 0,
+                                HEARTBEAT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
                     }
+                    return null;
+                }),
+                Case(instanceOf(AppendEntriesResponse.class), aer -> {
+                    LOGGER.info("AppendEntriesResponse received");
                     return null;
                 }),
                 Case($(), o -> {
@@ -158,8 +168,6 @@ public class RaftServer {
     }
 
     private void handleTimeout() {
-        LOGGER.debug("Timed out");
-
         switch (state) {
             case FOLLOWER:
                 state = State.CANDIDATE;
@@ -171,7 +179,7 @@ public class RaftServer {
                 startElection();
                 break;
             case LEADER:
-                // TODO: implement
+                sendHeartbeat();
                 break;
             default:
                 throw new IllegalStateException();
@@ -180,18 +188,29 @@ public class RaftServer {
 
     private void startElection() {
         currentTerm++;
-        electionTimeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateTimeout(), TimeUnit.MILLISECONDS);
+        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
         serverConnections.forEach((remoteAddress, connection) -> {
             votedFor = localAddress;
             RequestVote requestVote = new RequestVote(currentTerm, localAddress);
             connection.writeBytes(Observable.just(SerializationUtils.serialize(requestVote)))
                     .take(1)
                     .toBlocking()
-                    .forEach(o -> LOGGER.info("RequestVote sent"));
+                    .forEach(v -> LOGGER.info("RequestVote sent"));
         });
     }
 
-    private int calculateTimeout() {
-        return MIN_TIMEOUT_MILLIS + RAND.nextInt(MAX_TIMEOUT_MILLIS - MIN_TIMEOUT_MILLIS);
+    private void sendHeartbeat() {
+        serverConnections.forEach((remoteAddress, connection) -> {
+            votedFor = localAddress;
+            AppendEntries appendEntries = new AppendEntries();
+            connection.writeBytes(Observable.just(SerializationUtils.serialize(appendEntries)))
+                    .take(1)
+                    .toBlocking()
+                    .forEach(v -> LOGGER.info("Heartbeat sent"));
+        });
+    }
+
+    private int calculateElectionTimeout() {
+        return MIN_ELECTION_TIMEOUT_MILLIS + RAND.nextInt(MAX_ELECTION_TIMEOUT_MILLIS - MIN_ELECTION_TIMEOUT_MILLIS);
     }
 }
