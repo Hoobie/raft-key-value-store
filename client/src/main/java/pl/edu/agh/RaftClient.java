@@ -7,7 +7,7 @@ import org.apache.commons.lang3.SerializationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.edu.agh.messages.DummyMessage;
-import pl.edu.agh.util.MessageUtil;
+import pl.edu.agh.utils.MessageUtil;
 import rx.Observable;
 
 import java.net.InetSocketAddress;

@@ -16,8 +16,8 @@ import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
 import pl.edu.agh.messages.replication.AppendEntriesResponse;
-import pl.edu.agh.util.MessageUtil;
-import pl.edu.agh.util.SocketAddressUtil;
+import pl.edu.agh.utils.MessageUtil;
+import pl.edu.agh.utils.SocketAddressUtil;
 import rx.Observable;
 
 import java.net.InetSocketAddress;
@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 
 import static javaslang.API.*;
 import static javaslang.Predicates.instanceOf;
-import static pl.edu.agh.util.ThreadUtil.sleep;
+import static pl.edu.agh.utils.ThreadUtil.sleep;
 
 public class RaftServer {
 

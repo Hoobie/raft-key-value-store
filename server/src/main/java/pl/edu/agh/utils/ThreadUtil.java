@@ -1,4 +1,4 @@
-package pl.edu.agh.util;
+package pl.edu.agh.utils;
 
 public class ThreadUtil {
 

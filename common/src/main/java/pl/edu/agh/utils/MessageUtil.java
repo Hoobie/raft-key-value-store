@@ -1,4 +1,4 @@
-package pl.edu.agh.util;
+package pl.edu.agh.utils;
 
 import io.netty.buffer.ByteBuf;
 import org.apache.commons.lang3.SerializationUtils;

@@ -1,4 +1,4 @@
-package pl.edu.agh.util;
+package pl.edu.agh.utils;
 
 import org.apache.commons.lang3.tuple.Pair;
 
