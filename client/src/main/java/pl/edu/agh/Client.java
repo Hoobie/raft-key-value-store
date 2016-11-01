@@ -3,13 +3,15 @@ package pl.edu.agh;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
+import org.apache.commons.lang3.SerializationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import pl.edu.agh.messages.DummyMessage;
+import pl.edu.agh.util.MessageUtil;
 import rx.Observable;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.charset.Charset;
 
 public class Client {
 
@@ -18,15 +20,16 @@ public class Client {
     public static void main(String[] args) {
         SocketAddress serverAddress = new InetSocketAddress(12345);
 
-        TcpClient.newClient(serverAddress)
-                .enableWireLogging("client", LogLevel.DEBUG)
+        TcpClient.newClient(serverAddress).enableWireLogging("client", LogLevel.DEBUG)
                 .createConnectionRequest()
-                .flatMap(connection -> connection.writeStringAndFlushOnEach(Observable.just("Hello World!"))
-                        .cast(ByteBuf.class)
-                        .concatWith(connection.getInput()))
-                .map(byteBuf -> byteBuf.toString(Charset.defaultCharset()))
-                .first()
+                .flatMap(connection -> {
+                    byte[] msg = SerializationUtils.serialize(new DummyMessage());
+                    return connection.writeBytesAndFlushOnEach(Observable.just(msg))
+                            .cast(ByteBuf.class)
+                            .concatWith(connection.getInput());
+                })
+                .take(1)
                 .toBlocking()
-                .forEach(LOGGER::info);
+                .forEach(o -> LOGGER.info("Message received: {}", MessageUtil.toObject(o).toString()));
     }
 }

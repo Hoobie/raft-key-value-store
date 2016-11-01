@@ -1,9 +1,8 @@
 package pl.edu.agh.messages;
 
-import java.io.Serializable;
 import java.net.SocketAddress;
 
-public class RequestVote implements Serializable {
+public class RequestVote implements Message {
     public int term;
     public SocketAddress candidateAddress;
     // TODO: add last log index and term

@@ -10,8 +10,11 @@ import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import pl.edu.agh.messages.DummyMessage;
+import pl.edu.agh.messages.Message;
 import pl.edu.agh.messages.RequestVote;
 import pl.edu.agh.messages.VoteResponse;
+import pl.edu.agh.util.MessageUtil;
 import pl.edu.agh.util.SocketAddressUtil;
 import rx.Observable;
 
@@ -79,28 +82,28 @@ public class RaftServer {
         tcpServer.enableWireLogging("server", LogLevel.DEBUG)
                 .start(connection -> connection.writeBytesAndFlushOnEach(connection.getInput()
                         .doOnNext(msg -> LOGGER.info("Received a message"))
-                        .map(byteBuf -> {
-                            byte[] bytes = new byte[byteBuf.readableBytes()];
-                            byteBuf.getBytes(0, bytes);
-                            return SerializationUtils.deserialize(bytes);
-                        })
+                        .map(MessageUtil::toObject)
                         .map(this::handleRequest)
                         .filter(Optional::isPresent)
                         .map(Optional::get)
+                        .map(SerializationUtils::serialize)
                 ));
         return tcpServer;
     }
 
-    private Optional<byte[]> handleRequest(Object obj) {
-        return Match(obj).of(Case(instanceOf(RequestVote.class), (RequestVote rv) -> {
-            boolean granted = false;
-            if (votedFor == null) {
-                votedFor = rv.candidateAddress;
-                granted = true;
-            }
-            VoteResponse response = new VoteResponse(granted);
-            return Optional.of(SerializationUtils.serialize(response));
-        }), /* TODO: implement more handlers */ Case($(), o -> Optional.empty()));
+    private Optional<Message> handleRequest(Object obj) {
+        return Match(obj).of(
+                Case(instanceOf(RequestVote.class), (RequestVote rv) -> {
+                    boolean granted = false;
+                    if (votedFor == null) {
+                        votedFor = rv.candidateAddress;
+                        granted = true;
+                    }
+                    VoteResponse response = new VoteResponse(granted);
+                    return Optional.of(response);
+                }),
+                Case(instanceOf(DummyMessage.class), Optional::of),
+                Case($(), o -> Optional.empty()));
     }
 
     private Connection<ByteBuf, ByteBuf> createTcpConnection(String address, int port) {
@@ -129,7 +132,7 @@ public class RaftServer {
         Match(obj).of(Case(instanceOf(VoteResponse.class), (VoteResponse vr) -> {
             LOGGER.info("Received VoteResponse");
             if (vr.granted && votesCount.incrementAndGet() > serverConnections.size() / 2) {
-                LOGGER.info("Server %s became a leader", localAddress.toString());
+                LOGGER.info("Server {} became a leader", localAddress.toString());
                 state = State.LEADER;
                 votedFor = null;
                 votesCount = new AtomicInteger(0);

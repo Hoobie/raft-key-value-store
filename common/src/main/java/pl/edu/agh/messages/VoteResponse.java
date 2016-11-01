@@ -1,8 +1,6 @@
 package pl.edu.agh.messages;
 
-import java.io.Serializable;
-
-public class VoteResponse implements Serializable {
+public class VoteResponse implements Message {
     public boolean granted;
     // TODO: add term
 
