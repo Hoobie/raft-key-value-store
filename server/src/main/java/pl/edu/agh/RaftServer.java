@@ -95,7 +95,7 @@ public class RaftServer {
         return Match(obj).of(
                 Case(instanceOf(RequestVote.class), (RequestVote rv) -> {
                     boolean granted = false;
-                    if (votedFor == null) {
+                    if (votedFor == null || true /*FIXME: check term and being up-to-date*/) {
                         votedFor = rv.candidateAddress;
                         granted = true;
                     }
@@ -133,13 +133,13 @@ public class RaftServer {
         Match(obj).of(
                 Case(instanceOf(VoteResponse.class), (VoteResponse vr) -> {
                     LOGGER.info("Received VoteResponse");
-                    if (vr.granted && votesCount.incrementAndGet() > serverConnections.size() / 2) {
+                    if (vr.granted && isMajority(votesCount.incrementAndGet())) {
                         LOGGER.info("Server {} became a leader", localAddress.toString());
                         state = State.LEADER;
                         votedFor = null;
                         votesCount = new AtomicInteger(0);
                         electionTimeout.cancel(false);
-                        // TODO: send heartbeat
+                        // TODO: send heartbeats
                     }
                     return null;
                 }),
@@ -147,6 +147,10 @@ public class RaftServer {
                     throw new IllegalArgumentException("Wrong message");
                 })
         );
+    }
+
+    private boolean isMajority(int votesCount) {
+        return votesCount > serverConnections.size() / 2;
     }
 
     private void awaitShutdown() {
@@ -181,7 +185,9 @@ public class RaftServer {
             votedFor = localAddress;
             RequestVote requestVote = new RequestVote(currentTerm, localAddress);
             connection.writeBytes(Observable.just(SerializationUtils.serialize(requestVote)))
-                    .subscribe(o -> LOGGER.info("RequestVote sent"));
+                    .take(1)
+                    .toBlocking()
+                    .forEach(o -> LOGGER.info("RequestVote sent"));
         });
     }
 
