@@ -7,7 +7,7 @@ import org.apache.commons.lang3.SerializationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.edu.agh.messages.DummyMessage;
-import pl.edu.agh.utils.MessageUtil;
+import pl.edu.agh.utils.MessageUtils;
 import rx.Observable;
 
 import java.net.InetSocketAddress;
@@ -30,6 +30,6 @@ public class RaftClient {
                 })
                 .take(1)
                 .toBlocking()
-                .forEach(o -> LOGGER.info("Message received: {}", MessageUtil.toObject(o).toString()));
+                .forEach(o -> LOGGER.info("Message received: {}", MessageUtils.toObject(o).toString()));
     }
 }

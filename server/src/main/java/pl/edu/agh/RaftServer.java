@@ -16,8 +16,8 @@ import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
 import pl.edu.agh.messages.replication.AppendEntriesResponse;
-import pl.edu.agh.utils.MessageUtil;
-import pl.edu.agh.utils.SocketAddressUtil;
+import pl.edu.agh.utils.MessageUtils;
+import pl.edu.agh.utils.SocketAddressUtils;
 import rx.Observable;
 
 import java.net.InetSocketAddress;
@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 
 import static javaslang.API.*;
 import static javaslang.Predicates.instanceOf;
-import static pl.edu.agh.utils.ThreadUtil.sleep;
+import static pl.edu.agh.utils.ThreadUtils.sleep;
 
 public class RaftServer {
 
@@ -59,7 +59,7 @@ public class RaftServer {
     private ScheduledFuture timeout;
 
     public static void main(final String[] args) {
-        Pair<String, Integer> localAddress = SocketAddressUtil.splitHostAndPort(args[0]);
+        Pair<String, Integer> localAddress = SocketAddressUtils.splitHostAndPort(args[0]);
         RaftServer server = new RaftServer(localAddress.getLeft(), localAddress.getRight(),
                 ArrayUtils.subarray(args, 1, args.length));
         server.awaitShutdown();
@@ -70,7 +70,7 @@ public class RaftServer {
         this.localAddress = new InetSocketAddress(host, port);
 
         serverConnections = Arrays.stream(serversHostsAndPorts)
-                .map(SocketAddressUtil::splitHostAndPort)
+                .map(SocketAddressUtils::splitHostAndPort)
                 .map(hostAndPort -> {
                     Connection<ByteBuf, ByteBuf> tcpConnection = createTcpConnection(hostAndPort.getLeft(), hostAndPort.getRight());
                     return Pair.of(tcpConnection.getChannelPipeline().channel().remoteAddress(), tcpConnection);
@@ -84,7 +84,7 @@ public class RaftServer {
         TcpServer<ByteBuf, ByteBuf> tcpServer = TcpServer.newServer(port);
         tcpServer.enableWireLogging("server", LogLevel.DEBUG)
                 .start(connection -> connection.writeBytesAndFlushOnEach(connection.getInput()
-                        .map(MessageUtil::toObject)
+                        .map(MessageUtils::toObject)
                         .map(this::handleRequest)
                         .filter(Optional::isPresent)
                         .map(Optional::get)

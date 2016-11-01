@@ -1,6 +1,6 @@
 package pl.edu.agh.utils;
 
-public class ThreadUtil {
+public class ThreadUtils {
 
     public static void sleep(long millis) {
         try {
