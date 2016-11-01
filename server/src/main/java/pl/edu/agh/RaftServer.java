@@ -108,8 +108,12 @@ public class RaftServer {
                     // TODO: check content and perform proper actions
                     // for now it is only a heartbeat
                     AppendEntriesResponse response = new AppendEntriesResponse();
-                    timeout.cancel(false);
-                    timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
+                    if (ae.term >= currentTerm) {
+                        LOGGER.info("The leader have spoken");
+                        state = State.FOLLOWER;
+                        timeout.cancel(false);
+                        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
+                    }
                     return Optional.of(response);
                 }),
                 Case(instanceOf(DummyMessage.class), Optional::of),
@@ -207,7 +211,7 @@ public class RaftServer {
     private void sendHeartbeat() {
         serverConnections.forEach((remoteAddress, connection) -> {
             votedFor = localAddress;
-            AppendEntries appendEntries = new AppendEntries();
+            AppendEntries appendEntries = new AppendEntries(currentTerm);
             connection.writeBytes(Observable.just(SerializationUtils.serialize(appendEntries)))
                     .take(1)
                     .toBlocking()
