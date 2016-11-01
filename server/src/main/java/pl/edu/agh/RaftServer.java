@@ -103,7 +103,8 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(DummyMessage.class), Optional::of),
-                Case($(), o -> Optional.empty()));
+                Case($(), o -> Optional.empty())
+        );
     }
 
     private Connection<ByteBuf, ByteBuf> createTcpConnection(String address, int port) {
@@ -129,20 +130,23 @@ public class RaftServer {
     }
 
     private void handleResponse(Object obj) {
-        Match(obj).of(Case(instanceOf(VoteResponse.class), (VoteResponse vr) -> {
-            LOGGER.info("Received VoteResponse");
-            if (vr.granted && votesCount.incrementAndGet() > serverConnections.size() / 2) {
-                LOGGER.info("Server {} became a leader", localAddress.toString());
-                state = State.LEADER;
-                votedFor = null;
-                votesCount = new AtomicInteger(0);
-                electionTimeout.cancel(false);
-                // TODO: send heartbeat
-            }
-            return null;
-        }), Case($(), o -> {
-            throw new IllegalArgumentException("Wrong message");
-        }));
+        Match(obj).of(
+                Case(instanceOf(VoteResponse.class), (VoteResponse vr) -> {
+                    LOGGER.info("Received VoteResponse");
+                    if (vr.granted && votesCount.incrementAndGet() > serverConnections.size() / 2) {
+                        LOGGER.info("Server {} became a leader", localAddress.toString());
+                        state = State.LEADER;
+                        votedFor = null;
+                        votesCount = new AtomicInteger(0);
+                        electionTimeout.cancel(false);
+                        // TODO: send heartbeat
+                    }
+                    return null;
+                }),
+                Case($(), o -> {
+                    throw new IllegalArgumentException("Wrong message");
+                })
+        );
     }
 
     private void awaitShutdown() {
