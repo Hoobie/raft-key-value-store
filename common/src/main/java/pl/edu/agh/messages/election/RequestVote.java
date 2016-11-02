@@ -13,4 +13,20 @@ public class RequestVote implements RaftMessage {
         this.term = term;
         this.candidateAddress = candidateAddress;
     }
+
+    public int getTerm() {
+        return term;
+    }
+
+    public void setTerm(int term) {
+        this.term = term;
+    }
+
+    public SocketAddress getCandidateAddress() {
+        return candidateAddress;
+    }
+
+    public void setCandidateAddress(SocketAddress candidateAddress) {
+        this.candidateAddress = candidateAddress;
+    }
 }
