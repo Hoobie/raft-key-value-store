@@ -18,7 +18,9 @@ public class RaftClient {
     private static final Logger LOGGER = LoggerFactory.getLogger(RaftClient.class);
 
     public static void main(String[] args) {
-        SocketAddress serverAddress = new InetSocketAddress(12345);
+        if (args.length < 1) throw new RuntimeException("You have to provide server port number !");
+
+        SocketAddress serverAddress = new InetSocketAddress(Integer.parseInt(args[0]));
 
         TcpClient.newClient(serverAddress).enableWireLogging("client", LogLevel.DEBUG)
                 .createConnectionRequest()

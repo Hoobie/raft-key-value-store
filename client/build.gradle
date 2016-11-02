@@ -1,3 +1,10 @@
 dependencies {
     compile project(':common')
 }
+
+task runClient (type: JavaExec) {
+    description = "Testing deployment of client"
+    args '12345'
+    main = "pl.edu.agh.RaftClient"
+    classpath = sourceSets.main.runtimeClasspath
+}
