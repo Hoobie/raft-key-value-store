@@ -9,4 +9,12 @@ public class VoteResponse implements RaftMessage {
     public VoteResponse(boolean granted) {
         this.granted = granted;
     }
+
+    public boolean isGranted() {
+        return granted;
+    }
+
+    public void setGranted(boolean granted) {
+        this.granted = granted;
+    }
 }

@@ -8,4 +8,12 @@ public class AppendEntries implements RaftMessage {
     public AppendEntries(int term) {
         this.term = term;
     }
+
+    public int getTerm() {
+        return term;
+    }
+
+    public void setTerm(int term) {
+        this.term = term;
+    }
 }
