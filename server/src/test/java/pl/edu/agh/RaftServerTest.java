@@ -25,7 +25,7 @@ public class RaftServerTest {
         }.start();
 
         // when
-        ThreadUtils.sleep(2000L);
+        ThreadUtils.sleep(5000L);
 
         // then
         Assert.assertTrue(nodes[0].getState() == State.LEADER || nodes[1].getState() == State.LEADER);
