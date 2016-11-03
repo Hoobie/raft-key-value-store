@@ -1,5 +1,7 @@
 package pl.edu.agh.messages.client_communication;
 
+import com.google.common.base.MoreObjects;
+
 /**
  * Created by Andrzej on 2016-11-03.
  */
@@ -18,5 +20,13 @@ public class SetValue implements ClientMessage {
 
     public int getValue() {
         return value;
+    }
+
+    @Override
+    public String toString() {
+        return MoreObjects.toStringHelper(this)
+                .add("KEY", key)
+                .add("VALUE", value)
+                .toString();
     }
 }

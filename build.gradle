@@ -17,6 +17,7 @@ subprojects {
         compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.1.7'
         compile group: 'io.reactivex', name: 'rxnetty-tcp', version: '0.5.2-rc.4'
         compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.5'
+        compile group: 'com.google.guava', name: 'guava', version: '19.0'
         testCompile group: 'junit', name: 'junit', version: '4.11'
     }
 }
