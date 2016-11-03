@@ -4,13 +4,12 @@ package pl.edu.agh.logs;
  * Created by Andrzej on 2016-11-03.
  */
 public class LogEntry {
-    private long id;
+    private long id = -1;
     private KeyValueStoreAction action;
     private String key;
     private String value;
 
-    public LogEntry(long id, KeyValueStoreAction action, String key, String value) {
-        this.id = id;
+    public LogEntry(KeyValueStoreAction action, String key, String value) {
         this.action = action;
         this.key = key;
         this.value = value;
@@ -19,13 +18,17 @@ public class LogEntry {
     /**
      * Constructor for event of removing value (new value is not needed here)
      */
-    public LogEntry(long id, KeyValueStoreAction action, String key) {
-        this.id = id;
+    public LogEntry(KeyValueStoreAction action, String key) {
         this.action = action;
         this.key = key;
     }
 
+    public void setId(long id) {
+        this.id = id;
+    }
+
     public long getId() {
+        if (id == -1) throw new IllegalStateException("Log entry ID has to be set!");
         return id;
     }
 

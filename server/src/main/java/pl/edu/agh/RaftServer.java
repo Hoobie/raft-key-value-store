@@ -1,5 +1,6 @@
 package pl.edu.agh;
 
+import com.google.common.collect.Maps;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.channel.Connection;
@@ -16,6 +17,7 @@ import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
 import pl.edu.agh.messages.replication.AppendEntriesResponse;
+import pl.edu.agh.utils.LogArchive;
 import pl.edu.agh.utils.MessageUtils;
 import pl.edu.agh.utils.SocketAddressUtils;
 import rx.Observable;
@@ -58,6 +60,9 @@ public class RaftServer {
     private SocketAddress votedFor;
     private ScheduledFuture timeout;
 
+    private Map<String, Integer> keyValueStore = Maps.newHashMap();
+    private LogArchive logArchive;
+
     public static void main(final String[] args) {
         Pair<String, Integer> localAddress = SocketAddressUtils.splitHostAndPort(args[0]);
         new RaftServer(localAddress.getLeft(), localAddress.getRight(),
@@ -65,6 +70,7 @@ public class RaftServer {
     }
 
     public RaftServer(String host, int port, String... serversHostsAndPorts) {
+        logArchive = new LogArchive();
         tcpServer = createTcpServer(port);
         this.localAddress = new InetSocketAddress(host, port);
 
