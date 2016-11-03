@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.edu.agh.messages.DummyMessage;
 import pl.edu.agh.messages.RaftMessage;
-import pl.edu.agh.messages.client_communication.ClientMessage;
+import pl.edu.agh.messages.client_communication.*;
 import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
@@ -129,7 +129,7 @@ public class RaftServer {
                 Case(instanceOf(DummyMessage.class), Optional::of),
                 Case(instanceOf(ClientMessage.class), cm -> {
                     if (state == State.LEADER)
-                        handleClientMessage(cm);
+                        return handleClientMessage(cm);
                     else
                         resendClientMessage(cm);
                     return Optional.empty();
@@ -138,10 +138,26 @@ public class RaftServer {
         );
     }
 
-    private void handleClientMessage(ClientMessage cm) {
+    private Optional<RaftMessage> handleClientMessage(ClientMessage cm) {
         LOGGER.info("I'm a leader and I got this client message: " + cm.toString());
 
-        // TODO
+        return Match(cm).of(
+                Case(instanceOf(GetValue.class), gv -> {
+                    GetValueResponse response = new GetValueResponse(keyValueStore.get(gv.getKey()));
+                    return Optional.of(response);
+                }),
+                Case(instanceOf(SetValue.class), sv -> {
+                    keyValueStore.put(sv.getKey(), sv.getValue());
+                    SetValueResponse response = new SetValueResponse(true);
+                    return Optional.of(response);
+                }),
+                Case(instanceOf(RemoveValue.class), rv -> {
+                    keyValueStore.remove(rv.getKey());
+                    RemoveValueResponse response = new RemoveValueResponse(true);
+                    return Optional.of(response);
+                }),
+                Case($(), o -> Optional.empty())
+        );
     }
 
     private void resendClientMessage(ClientMessage cm) {
