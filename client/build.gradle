@@ -1,5 +1,6 @@
 dependencies {
     compile project(':common')
+    compile group: 'io.javaslang', name: 'javaslang', version: '2.0.4'
 }
 
 task runClient (type: JavaExec) {

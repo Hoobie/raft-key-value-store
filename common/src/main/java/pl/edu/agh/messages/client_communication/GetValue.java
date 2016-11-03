@@ -1,11 +1,9 @@
 package pl.edu.agh.messages.client_communication;
 
-import pl.edu.agh.messages.RaftMessage;
-
 /**
  * Created by Andrzej on 2016-11-03.
  */
-public class GetValue implements RaftMessage {
+public class GetValue implements ClientMessage {
     private String key;
 
     public GetValue(String key) {

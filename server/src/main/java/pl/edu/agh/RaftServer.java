@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.edu.agh.messages.DummyMessage;
 import pl.edu.agh.messages.RaftMessage;
+import pl.edu.agh.messages.client_communication.ClientMessage;
 import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
@@ -126,8 +127,30 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(DummyMessage.class), Optional::of),
+                Case(instanceOf(ClientMessage.class), cm -> {
+                    if (state == State.LEADER)
+                        handleClientMessage(cm);
+                    else
+                        resendClientMessage(cm);
+                    return Optional.empty();
+                }),
                 Case($(), o -> Optional.empty())
         );
+    }
+
+    private void handleClientMessage(ClientMessage cm) {
+        LOGGER.info("I'm a leader and I got this client message: " + cm.toString());
+
+        // TODO
+    }
+
+    private void resendClientMessage(ClientMessage cm) {
+        serverConnections.forEach((remoteAddress, connection) -> {
+            connection.writeBytes(Observable.just(SerializationUtils.serialize(cm)))
+                    .take(1)
+                    .toBlocking()
+                    .forEach(v -> LOGGER.info("Client message resent"));
+        });
     }
 
     private Connection<ByteBuf, ByteBuf> createTcpConnection(String address, int port) {
