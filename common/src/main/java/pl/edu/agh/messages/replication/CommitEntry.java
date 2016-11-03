@@ -3,16 +3,14 @@ package pl.edu.agh.messages.replication;
 import pl.edu.agh.logs.LogEntry;
 import pl.edu.agh.messages.RaftMessage;
 
-public class AppendEntries implements RaftMessage {
-    public int term;
+/**
+ * Created by Andrzej on 2016-11-03.
+ */
+public class CommitEntry implements RaftMessage {
     private LogEntry logEntry;
 
-    public AppendEntries(int term) {
-        this.term = term;
-    }
-
-    public AppendEntries(LogEntry log) {
-        this.logEntry = log;
+    public CommitEntry(LogEntry logEntry) {
+        this.logEntry = logEntry;
     }
 
     public LogEntry getLogEntry() {
