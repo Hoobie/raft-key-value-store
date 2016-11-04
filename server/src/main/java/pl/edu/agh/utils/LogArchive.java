@@ -22,9 +22,10 @@ public class LogArchive {
         commitedEntries = Lists.newArrayList();
     }
 
-    public void appendLog(LogEntry entry) {
+    public LogEntry appendLog(LogEntry entry) {
         entry.setId(pendingEntries.size() + 1);
         pendingEntries.put(entry, NO_SERVERS_RECEIVED_ENTRY);
+        return entry;
     }
 
     public int logEntryReceived(LogEntry entry) {

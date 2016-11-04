@@ -11,13 +11,15 @@ import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import pl.edu.agh.messages.DummyMessage;
+import pl.edu.agh.logs.KeyValueStoreAction;
+import pl.edu.agh.logs.LogEntry;
 import pl.edu.agh.messages.RaftMessage;
 import pl.edu.agh.messages.client_communication.*;
 import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
 import pl.edu.agh.messages.replication.AppendEntriesResponse;
+import pl.edu.agh.messages.replication.CommitEntry;
 import pl.edu.agh.utils.LogArchive;
 import pl.edu.agh.utils.MessageUtils;
 import pl.edu.agh.utils.SocketAddressUtils;
@@ -115,18 +117,25 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(AppendEntries.class), ae -> {
-                    // TODO: check content and perform proper actions
-                    // for now it is only a heartbeat
-                    AppendEntriesResponse response = new AppendEntriesResponse();
-                    if (ae.term >= currentTerm) {
-                        LOGGER.info("The leader have spoken");
-                        state = State.FOLLOWER;
-                        timeout.cancel(false);
-                        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
+                    if (ae.getLogEntry() != null)
+                        return handleLogEntry(ae.getLogEntry());
+                    else {
+                        // Heartbeat
+                        AppendEntriesResponse response = new AppendEntriesResponse();
+                        if (ae.term >= currentTerm) {
+                            LOGGER.info("The leader have spoken");
+                            state = State.FOLLOWER;
+                            timeout.cancel(false);
+                            timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
+                        }
+                        return Optional.of(response);
                     }
-                    return Optional.of(response);
                 }),
-                Case(instanceOf(DummyMessage.class), Optional::of),
+                Case(instanceOf(CommitEntry.class), ce -> {
+                    LogEntry entry = ce.getLogEntry();
+                    commitEntry(entry);
+                    return Optional.empty();
+                }),
                 Case(instanceOf(ClientMessage.class), cm -> {
                     if (state == State.LEADER)
                         return handleClientMessage(cm);
@@ -134,6 +143,24 @@ public class RaftServer {
                 }),
                 Case($(), o -> Optional.empty())
         );
+    }
+
+    private void commitEntry(LogEntry entry) {
+        logArchive.commitEntry(entry);
+        switch (entry.getAction()) {
+            case SET:
+                keyValueStore.put(entry.getKey(), entry.getValue());
+                break;
+            case REMOVE:
+                keyValueStore.remove(entry.getKey());
+                break;
+        }
+    }
+
+    private Optional<RaftMessage> handleLogEntry(LogEntry entry) {
+        entry = logArchive.appendLog(entry);
+        AppendEntriesResponse response = new AppendEntriesResponse(entry);
+        return Optional.of(response);
     }
 
     private Optional<RaftMessage> handleClientMessage(ClientMessage cm) {
@@ -145,14 +172,16 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(SetValue.class), sv -> {
-                    keyValueStore.put(sv.getKey(), sv.getValue());
-                    SetValueResponse response = new SetValueResponse(true);
-                    return Optional.of(response);
+                    LogEntry entry = new LogEntry(KeyValueStoreAction.SET, sv.getKey(), sv.getValue());
+                    logArchive.appendLog(entry);
+                    sendLog(entry);
+                    return Optional.empty();
                 }),
                 Case(instanceOf(RemoveValue.class), rv -> {
-                    keyValueStore.remove(rv.getKey());
-                    RemoveValueResponse response = new RemoveValueResponse(true);
-                    return Optional.of(response);
+                    LogEntry entry = new LogEntry(KeyValueStoreAction.REMOVE, rv.getKey());
+                    logArchive.appendLog(entry);
+                    sendLog(entry);
+                    return Optional.empty();
                 }),
                 Case($(), o -> Optional.empty())
         );
@@ -196,6 +225,12 @@ public class RaftServer {
                     return null;
                 }),
                 Case(instanceOf(AppendEntriesResponse.class), aer -> {
+                    LogEntry entry = aer.getEntry();
+                    if (entry == null) {
+                        // Heartbeat response
+                    } else {
+                        handleLogEntryResponse(entry);
+                    }
                     LOGGER.info("AppendEntriesResponse received");
                     return null;
                 }),
@@ -203,6 +238,12 @@ public class RaftServer {
                     throw new IllegalArgumentException("Wrong message");
                 })
         );
+    }
+
+    private void handleLogEntryResponse(LogEntry entry) {
+        int responsesCount = logArchive.logEntryReceived(entry);
+        if (isMajority(responsesCount))
+            sendCommitEntry(entry);
     }
 
     private boolean isMajority(int votesCount) {
@@ -249,6 +290,24 @@ public class RaftServer {
                     .take(1)
                     .toBlocking()
                     .forEach(v -> LOGGER.info("Heartbeat sent"));
+        });
+    }
+
+    public void sendLog(LogEntry entry) {
+        serverConnections.forEach((remoteAddress, connection) -> {
+            connection.writeBytes(Observable.just(SerializationUtils.serialize(new AppendEntries(entry))))
+                    .take(1)
+                    .toBlocking()
+                    .forEach(v -> LOGGER.info("Log sent {} ", entry.toString()));
+        });
+    }
+
+    public void sendCommitEntry(LogEntry entry) {
+        serverConnections.forEach((remoteAddress, connection) -> {
+            connection.writeBytes(Observable.just(SerializationUtils.serialize(new CommitEntry(entry))))
+                    .take(1)
+                    .toBlocking()
+                    .forEach(v -> LOGGER.info("Commit entry sent {} ", entry.toString()));
         });
     }
 

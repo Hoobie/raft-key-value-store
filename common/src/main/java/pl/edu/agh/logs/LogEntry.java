@@ -1,15 +1,19 @@
 package pl.edu.agh.logs;
 
+import com.google.common.base.MoreObjects;
+
+import java.io.Serializable;
+
 /**
  * Created by Andrzej on 2016-11-03.
  */
-public class LogEntry {
+public class LogEntry implements Serializable {
     private long id = -1;
     private KeyValueStoreAction action;
     private String key;
-    private String value;
+    private int value;
 
-    public LogEntry(KeyValueStoreAction action, String key, String value) {
+    public LogEntry(KeyValueStoreAction action, String key, int value) {
         this.action = action;
         this.key = key;
         this.value = value;
@@ -40,9 +44,19 @@ public class LogEntry {
         return key;
     }
 
-    public String getValue() {
+    public int getValue() {
         if (action == KeyValueStoreAction.REMOVE)
             throw new IllegalStateException("There is no new value when removing from key value store!");
         return value;
+    }
+
+    @Override
+    public String toString() {
+        return MoreObjects.toStringHelper(this)
+                .add("id", id)
+                .add("Action", action)
+                .add("Key", key)
+                .add("Value", value)
+                .toString();
     }
 }
