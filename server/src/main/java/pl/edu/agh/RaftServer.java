@@ -130,8 +130,6 @@ public class RaftServer {
                 Case(instanceOf(ClientMessage.class), cm -> {
                     if (state == State.LEADER)
                         return handleClientMessage(cm);
-                    else
-                        resendClientMessage(cm);
                     return Optional.empty();
                 }),
                 Case($(), o -> Optional.empty())
