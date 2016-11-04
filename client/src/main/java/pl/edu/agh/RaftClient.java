@@ -1,14 +1,19 @@
 package pl.edu.agh;
 
+import com.google.common.collect.Lists;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
 import org.apache.commons.lang3.SerializationUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.edu.agh.messages.client_communication.*;
+import pl.edu.agh.utils.SocketAddressUtils;
 import rx.Observable;
+
+import java.util.List;
 
 import static javaslang.API.*;
 import static javaslang.Predicates.instanceOf;
@@ -17,27 +22,38 @@ public class RaftClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RaftClient.class);
 
-    private static Connection<ByteBuf, ByteBuf> serverConnection;
+    private static List<Connection<ByteBuf, ByteBuf>> serverConnections = Lists.newArrayList();
 
     public static void main(String[] args) {
-        if (args.length < 1) throw new RuntimeException("You have to provide server port number !");
+        if (args.length < 1)
+            throw new RuntimeException("You have to provide at least one server address and port number!");
 
-        serverConnection = TcpClient.newClient("127.0.0.1", Integer.parseInt(args[0]))
-                .enableWireLogging("client", LogLevel.DEBUG)
-                .createConnectionRequest()
-                .toBlocking()
-                .first();
+        Pair<String, Integer> address;
+        Connection<ByteBuf, ByteBuf> connection;
+        for (String arg : args) {
+            try {
+                address = SocketAddressUtils.splitHostAndPort(arg);
+                connection = TcpClient.newClient(address.getLeft(), address.getRight())
+                        .enableWireLogging("client", LogLevel.DEBUG)
+                        .createConnectionRequest()
+                        .toBlocking()
+                        .first();
+                connection.getInput().forEach(byteBuf -> {
+                    byte[] bytes = new byte[byteBuf.readableBytes()];
+                    byteBuf.getBytes(0, bytes);
+                    handleResponse(SerializationUtils.deserialize(bytes));
+                });
 
-        serverConnection.getInput().forEach(byteBuf -> {
-            byte[] bytes = new byte[byteBuf.readableBytes()];
-            byteBuf.getBytes(0, bytes);
-            handleResponse(SerializationUtils.deserialize(bytes));
-        });
+                serverConnections.add(connection);
+            } catch (Exception ingored) {
+                // No all server may be up
+            }
+        }
 
         setValue("test", 1);
         getValue("test");
         removeValue("test");
-        while (true);
+        while (true) ;
     }
 
     private static void handleResponse(Object obj) {
@@ -63,25 +79,25 @@ public class RaftClient {
 
     public static void getValue(String key) {
         byte[] msg = SerializationUtils.serialize(new GetValue(key));
-        serverConnection.writeBytes(Observable.just(msg))
+        serverConnections.forEach(c -> c.writeBytes(Observable.just(msg))
                 .take(1)
                 .toBlocking()
-                .forEach(v -> LOGGER.info("Get value request sent for key {} ", key));
+                .forEach(v -> LOGGER.info("Get value request sent for key {} ", key)));
     }
 
     public static void setValue(String key, int value) {
         byte[] msg = SerializationUtils.serialize(new SetValue(key, value));
-        serverConnection.writeBytes(Observable.just(msg))
+        serverConnections.forEach(c -> c.writeBytes(Observable.just(msg))
                 .take(1)
                 .toBlocking()
-                .forEach(v -> LOGGER.info("Set value request sent for key {} with value {} ", key, value));
+                .forEach(v -> LOGGER.info("Set value request sent for key {} with value {} ", key, value)));
     }
 
     public static void removeValue(String key) {
         byte[] msg = SerializationUtils.serialize(new RemoveValue(key));
-        serverConnection.writeBytes(Observable.just(msg))
+        serverConnections.forEach(c -> c.writeBytes(Observable.just(msg))
                 .take(1)
                 .toBlocking()
-                .forEach(v -> LOGGER.info("Remove value request sent for key {}", key));
+                .forEach(v -> LOGGER.info("Remove value request sent for key {}", key)));
     }
 }

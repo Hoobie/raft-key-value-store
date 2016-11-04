@@ -158,15 +158,6 @@ public class RaftServer {
         );
     }
 
-    private void resendClientMessage(ClientMessage cm) {
-        serverConnections.forEach((remoteAddress, connection) -> {
-            connection.writeBytes(Observable.just(SerializationUtils.serialize(cm)))
-                    .take(1)
-                    .toBlocking()
-                    .forEach(v -> LOGGER.info("Client message resent"));
-        });
-    }
-
     private Connection<ByteBuf, ByteBuf> createTcpConnection(String address, int port) {
         try {
             Connection<ByteBuf, ByteBuf> connection = TcpClient.newClient(address, port)
