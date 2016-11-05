@@ -50,7 +50,7 @@ public class RaftClient {
             }
         }
 
-        setValue("test", 1);
+//        setValue("test", 1);
         getValue("test");
         removeValue("test");
         while (true) ;

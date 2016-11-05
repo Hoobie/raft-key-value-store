@@ -1,13 +1,14 @@
 package pl.edu.agh.logs;
 
 import com.google.common.base.MoreObjects;
+import pl.edu.agh.messages.RaftMessage;
 
 import java.io.Serializable;
 
 /**
  * Created by Andrzej on 2016-11-03.
  */
-public class LogEntry implements Serializable {
+public class LogEntry implements RaftMessage {
     private long id = -1;
     private KeyValueStoreAction action;
     private String key;
