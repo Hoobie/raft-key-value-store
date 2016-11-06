@@ -117,21 +117,20 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(AppendEntries.class), ae -> {
-                    resetTimeout();
                     // Heartbeat
                     AppendEntriesResponse response = new AppendEntriesResponse();
                     if (ae.term >= currentTerm) {
                         LOGGER.info("The leader have spoken");
                         state = State.FOLLOWER;
+                        timeout.cancel(false);
+                        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                     }
                     return Optional.of(response);
                 }),
                 Case(instanceOf(LogEntry.class), le -> {
-                    resetTimeout();
                     return handleLogEntry(le);
                 }),
                 Case(instanceOf(CommitEntry.class), ce -> {
-                    resetTimeout();
                     LogEntry entry = ce.getLogEntry();
                     commitEntry(entry);
                     return Optional.empty();
@@ -145,10 +144,6 @@ public class RaftServer {
         );
     }
 
-    private void resetTimeout() {
-        timeout.cancel(false);
-        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
-    }
 
     private void commitEntry(LogEntry entry) {
         logArchive.commitEntry(entry);
@@ -203,9 +198,7 @@ public class RaftServer {
                     .first();
 
             connection.getInput().forEach(byteBuf -> {
-                byte[] bytes = new byte[byteBuf.readableBytes()];
-                byteBuf.getBytes(0, bytes);
-                handleResponse(SerializationUtils.deserialize(bytes));
+                handleResponse(MessageUtils.toObject(byteBuf));
             });
 
             return connection;
