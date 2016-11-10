@@ -261,6 +261,7 @@ public class RaftServer {
 
         int responsesCount = logArchive.logEntryReceived(entry);
         if (isMajority(responsesCount)) {
+            commitEntry(entry);
             RaftMessage response = null;
             if (entry.getAction() == KeyValueStoreAction.REMOVE)
                 response = new RemoveValueResponse(true);
