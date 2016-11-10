@@ -23,7 +23,7 @@ public class LogArchive {
     }
 
     public LogEntry appendLog(LogEntry entry) {
-        entry.setId(pendingEntries.size() + 1);
+        entry.setId(pendingEntries.size() + commitedEntries.size() + 1);
         pendingEntries.put(entry, NO_SERVERS_RECEIVED_ENTRY);
         return entry;
     }
