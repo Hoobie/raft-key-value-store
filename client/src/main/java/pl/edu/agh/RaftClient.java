@@ -5,8 +5,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
-import org.apache.commons.lang3.SerializationUtils;
-import org.apache.commons.lang3.ThreadUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,15 +25,22 @@ public class RaftClient {
 
     private static List<Connection<ByteBuf, ByteBuf>> serverConnections = Lists.newArrayList();
 
+    private ClientCallback callback = null;
+
     public static void main(String[] args) {
         if (args.length < 1)
             throw new RuntimeException("You have to provide at least one server address and port number!");
 
-        Pair<String, Integer> address;
+        List<Pair<String, Integer>> serverAddresses = Lists.newArrayList();
+        for (String arg : args)
+            serverAddresses.add(SocketAddressUtils.splitHostAndPort(arg));
+        new RaftClient(serverAddresses);
+    }
+
+    public RaftClient(List<Pair<String, Integer>> serverAddresses) {
         Connection<ByteBuf, ByteBuf> connection;
-        for (String arg : args) {
+        for (Pair<String, Integer> address : serverAddresses) {
             try {
-                address = SocketAddressUtils.splitHostAndPort(arg);
                 connection = TcpClient.newClient(address.getLeft(), address.getRight())
                         .enableWireLogging("client", LogLevel.DEBUG)
                         .createConnectionRequest()
@@ -61,21 +66,29 @@ public class RaftClient {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        while (true) ;
+
+        while (true);
     }
 
-    private static void handleResponse(Object obj) {
+    public void setCallback(ClientCallback callback) {
+        this.callback = callback;
+    }
+
+    private void handleResponse(Object obj) {
         Match(obj).of(
                 Case(instanceOf(GetValueResponse.class), gv -> {
                     LOGGER.info("Get Value response {} ", gv.getValue());
+                    if (callback != null) callback.onValueGet(gv.getValue());
                     return null;
                 }),
                 Case(instanceOf(SetValueResponse.class), sv -> {
                     LOGGER.info("Set Value response {}", sv.isSuccessful());
+                    if (callback != null) callback.onValueSet(sv.isSuccessful());
                     return null;
                 }),
                 Case(instanceOf(RemoveValueResponse.class), rv -> {
                     LOGGER.info("Remove Value response {} ", rv.isSuccessful());
+                    if (callback != null) callback.onValueRemoved(rv.isSuccessful());
                     return null;
                 }),
                 Case($(), o -> {
@@ -85,7 +98,7 @@ public class RaftClient {
 
     }
 
-    public static void getValue(String key) {
+    private void getValue(String key) {
         String msg = MessageUtils.toString(new GetValue(key));
         serverConnections.forEach(c -> c.writeString(Observable.just(msg))
                 .take(1)
@@ -93,7 +106,7 @@ public class RaftClient {
                 .forEach(v -> LOGGER.info("Get value request sent for key {} ", key)));
     }
 
-    public static void setValue(String key, int value) {
+    private void setValue(String key, int value) {
         String msg = MessageUtils.toString(new SetValue(key, value));
         serverConnections.forEach(c -> c.writeString(Observable.just(msg))
                 .take(1)
@@ -101,7 +114,7 @@ public class RaftClient {
                 .forEach(v -> LOGGER.info("Set value request sent for key {} with value {} ", key, value)));
     }
 
-    public static void removeValue(String key) {
+    private void removeValue(String key) {
         String msg = MessageUtils.toString(new RemoveValue(key));
         serverConnections.forEach(c -> c.writeString(Observable.just(msg))
                 .take(1)
