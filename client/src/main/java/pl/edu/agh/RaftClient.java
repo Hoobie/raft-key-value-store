@@ -3,6 +3,7 @@ package pl.edu.agh;
 import com.google.common.collect.Lists;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
+import io.reactivex.netty.channel.ChannelOperations;
 import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
 import org.apache.commons.lang3.tuple.Pair;
@@ -86,6 +87,11 @@ public class RaftClient {
                 Case(instanceOf(RemoveValueResponse.class), rv -> {
                     LOGGER.info("Remove Value response {} ", rv.isSuccessful());
                     if (callback != null) callback.onValueRemoved(rv.isSuccessful());
+                    return null;
+                }),
+                Case(instanceOf(KeyNotInStoreResponse.class), kn -> {
+                    LOGGER.error("Key {} is not in store!", kn.getKey());
+                    if (callback != null) callback.onKeyNotInStore(kn.getKey());
                     return null;
                 }),
                 Case($(), o -> {

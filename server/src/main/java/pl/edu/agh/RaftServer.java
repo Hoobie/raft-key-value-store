@@ -4,6 +4,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
+import io.reactivex.netty.channel.ChannelOperations;
 import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
 import io.reactivex.netty.protocol.tcp.server.TcpServer;
@@ -180,7 +181,8 @@ public class RaftServer {
 
         return Match(cm).of(
                 Case(instanceOf(GetValue.class), gv -> {
-                    // TODO: take care of key not being present in map
+                    if (!keyValueStore.containsKey(gv.getKey()))
+                        return Optional.of(new KeyNotInStoreResponse(gv.getKey()));
                     GetValueResponse response = new GetValueResponse(keyValueStore.get(gv.getKey()));
                     return Optional.of(response);
                 }),
@@ -191,7 +193,8 @@ public class RaftServer {
                     return Optional.empty();
                 }),
                 Case(instanceOf(RemoveValue.class), rv -> {
-                    // TODO: take care of key not being present in map
+                    if (!keyValueStore.containsKey(rv.getKey()))
+                        return Optional.of(new KeyNotInStoreResponse(rv.getKey()));
                     LogEntry entry = new LogEntry(KeyValueStoreAction.REMOVE, rv.getKey());
                     entry = logArchive.appendLog(entry);
                     messagesToNeighbors.add(entry);
