@@ -6,7 +6,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
-import io.reactivex.netty.protocol.tcp.server.ConnectionHandler;
 import io.reactivex.netty.protocol.tcp.server.TcpServer;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -53,7 +52,6 @@ public class RaftServer {
     private static final ScheduledExecutorService TIMEOUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
 
     private final SocketAddress localAddress;
-    private final TcpServer<ByteBuf, ByteBuf> tcpServer;
     private Map<SocketAddress, Connection<ByteBuf, ByteBuf>> serverConnections = Maps.newHashMap();
     private Connection<ByteBuf, ByteBuf> clientConnection;
 
@@ -75,7 +73,7 @@ public class RaftServer {
 
     public RaftServer(String host, int port, String... serversHostsAndPorts) {
         logArchive = new LogArchive();
-        tcpServer = createTcpServer(port);
+        createTcpServer(port);
         this.localAddress = new InetSocketAddress(host, port);
 
         serverConnections = Arrays.stream(serversHostsAndPorts)
@@ -111,16 +109,12 @@ public class RaftServer {
     }
 
     private void checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
-        boolean isClient = true;
+        long count = serverConnections.keySet()
+                .stream()
+                .filter(socketAddress -> socketAddress.toString().equals(connection.unsafeNettyChannel().remoteAddress().toString()))
+                .count();
 
-        for (SocketAddress serverAddres : serverConnections.keySet()) {
-            if (serverAddres.toString().equals(connection.unsafeNettyChannel().remoteAddress().toString())) {
-                isClient = false;
-                break;
-            }
-        }
-
-        if (isClient) clientConnection = connection;
+        if (count > 0) clientConnection = connection;
     }
 
     private Optional<RaftMessage> handleRequest(Object obj) {
