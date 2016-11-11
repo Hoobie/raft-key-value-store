@@ -4,7 +4,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
-import io.reactivex.netty.channel.ChannelOperations;
 import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
 import io.reactivex.netty.protocol.tcp.server.TcpServer;
@@ -154,7 +153,6 @@ public class RaftServer {
                 Case($(), o -> Optional.empty())
         );
     }
-
 
     private void commitEntry(LogEntry entry) {
         LOGGER.info("Commit entry: " + entry);
