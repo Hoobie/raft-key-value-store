@@ -14,6 +14,7 @@
     <orderEntry type="library" name="Gradle: org.apache.commons:commons-lang3:3.5" level="project" />
     <orderEntry type="library" name="Gradle: com.google.guava:guava:19.0" level="project" />
     <orderEntry type="module" module-name="common_main" />
+    <orderEntry type="module" module-name="server_main" />
     <orderEntry type="library" name="Gradle: io.javaslang:javaslang:2.0.4" level="project" />
     <orderEntry type="library" name="Gradle: ch.qos.logback:logback-core:1.1.7" level="project" />
     <orderEntry type="library" name="Gradle: org.slf4j:slf4j-api:1.7.20" level="project" />

@@ -111,7 +111,7 @@ public class RaftServer {
     private void checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
         long count = serverConnections.keySet()
                 .stream()
-                .filter(socketAddress -> socketAddress.toString().equals(connection.unsafeNettyChannel().remoteAddress().toString()))
+                .filter(socketAddress -> !socketAddress.toString().equals(connection.unsafeNettyChannel().remoteAddress().toString()))
                 .count();
 
         if (count > 0) clientConnection = connection;
