@@ -125,6 +125,7 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(AppendEntries.class), ae -> {
+                    // TODO: check content and perform proper actions
                     // Heartbeat
                     AppendEntriesResponse response = new AppendEntriesResponse();
                     if (ae.term >= currentTerm) {
