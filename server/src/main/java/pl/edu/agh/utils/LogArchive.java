@@ -4,9 +4,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import pl.edu.agh.logs.LogEntry;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Created by Andrzej on 2016-11-03.
@@ -14,12 +12,12 @@ import java.util.Optional;
 public class LogArchive {
     private static final int NO_SERVERS_RECEIVED_ENTRY = 0;
 
-    private Map<LogEntry, Integer> pendingEntries;
-    private List<LogEntry> commitedEntries;
+    private final Map<LogEntry, Integer> pendingEntries;
+    private final List<LogEntry> commitedEntries;
 
     public LogArchive() {
-        pendingEntries = Maps.newHashMap();
-        commitedEntries = Lists.newArrayList();
+        pendingEntries = new HashMap<>();
+        commitedEntries = new ArrayList<>();
     }
 
     public LogEntry appendLog(LogEntry entry) {

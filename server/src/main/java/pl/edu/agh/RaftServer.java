@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import pl.edu.agh.logs.KeyValueStoreAction;
 import pl.edu.agh.logs.LogEntry;
 import pl.edu.agh.messages.RaftMessage;
-import pl.edu.agh.messages.client_communication.*;
+import pl.edu.agh.messages.client.*;
 import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
@@ -29,10 +29,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.charset.Charset;
 import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -52,7 +49,7 @@ public class RaftServer {
     private static final ScheduledExecutorService TIMEOUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
 
     private final SocketAddress localAddress;
-    private Map<SocketAddress, Connection<ByteBuf, ByteBuf>> serverConnections = Maps.newHashMap();
+    private final Map<SocketAddress, Connection<ByteBuf, ByteBuf>> serverConnections;
     private Connection<ByteBuf, ByteBuf> clientConnection;
 
     private State state = State.FOLLOWER;
@@ -61,9 +58,9 @@ public class RaftServer {
     private SocketAddress votedFor;
     private ScheduledFuture timeout;
 
-    private volatile Map<String, Integer> keyValueStore = Maps.newHashMap();
-    private LogArchive logArchive;
-    private Queue<RaftMessage> messagesToNeighbors = Queues.newConcurrentLinkedQueue();
+    private final Map<String, Integer> keyValueStore = new HashMap<>();
+    private final LogArchive logArchive = new LogArchive();
+    private final Queue<RaftMessage> messagesToNeighbors = new ConcurrentLinkedQueue<>();
 
     public static void main(final String[] args) {
         Pair<String, Integer> localAddress = SocketAddressUtils.splitHostAndPort(args[0]);
@@ -72,7 +69,6 @@ public class RaftServer {
     }
 
     public RaftServer(String host, int port, String... serversHostsAndPorts) {
-        logArchive = new LogArchive();
         createTcpServer(port);
         this.localAddress = new InetSocketAddress(host, port);
 
@@ -109,7 +105,7 @@ public class RaftServer {
     }
 
     private void checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
-        long count = serverConnections.keySet()
+        long count = (serverConnections == null) ? 0 : serverConnections.keySet()
                 .stream()
                 .filter(socketAddress -> !socketAddress.toString().equals(connection.unsafeNettyChannel().remoteAddress().toString()))
                 .count();

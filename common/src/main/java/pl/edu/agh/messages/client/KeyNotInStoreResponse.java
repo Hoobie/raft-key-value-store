@@ -1,4 +1,4 @@
-package pl.edu.agh.messages.client_communication;
+package pl.edu.agh.messages.client;
 
 /**
  * Created by Andrzej on 2016-11-11.

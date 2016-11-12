@@ -3,16 +3,14 @@ package pl.edu.agh;
 import com.google.common.collect.Lists;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
-import io.reactivex.netty.channel.ChannelOperations;
 import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import pl.edu.agh.messages.client_communication.*;
+import pl.edu.agh.messages.client.*;
 import pl.edu.agh.utils.MessageUtils;
 import pl.edu.agh.utils.SocketAddressUtils;
-import pl.edu.agh.utils.ThreadUtils;
 import rx.Observable;
 
 import java.nio.charset.Charset;
@@ -23,8 +21,6 @@ import static javaslang.Predicates.instanceOf;
 
 public class RaftClient {
 
-    private static final int VALUE = 1;
-    private static final String KEY = "test";
     private static final Logger LOGGER = LoggerFactory.getLogger(RaftClient.class);
 
     private static List<Connection<ByteBuf, ByteBuf>> serverConnections = Lists.newArrayList();
@@ -58,14 +54,6 @@ public class RaftClient {
                 // No all server may be up
             }
         }
-
-//        setValue(KEY, VALUE);
-//        ThreadUtils.sleep(5000);
-//        getValue(KEY);
-//        ThreadUtils.sleep(5000);
-//        removeValue(KEY);
-//
-//        while(true);
     }
 
     public void setCallback(ClientCallback callback) {

@@ -1,4 +1,4 @@
-package pl.edu.agh.messages.client_communication;
+package pl.edu.agh.messages.client;
 
 import pl.edu.agh.messages.RaftMessage;
 

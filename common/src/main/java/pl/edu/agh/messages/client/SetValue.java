@@ -1,25 +1,32 @@
-package pl.edu.agh.messages.client_communication;
+package pl.edu.agh.messages.client;
 
 import com.google.common.base.MoreObjects;
 
 /**
  * Created by Andrzej on 2016-11-03.
  */
-public class GetValue implements ClientMessage {
+public class SetValue implements ClientMessage {
     private String key;
+    private int value;
 
-    public GetValue(String key) {
+    public SetValue(String key, int value) {
         this.key = key;
+        this.value = value;
     }
 
     public String getKey() {
         return key;
     }
 
+    public int getValue() {
+        return value;
+    }
+
     @Override
     public String toString() {
         return MoreObjects.toStringHelper(this)
                 .add("KEY", key)
+                .add("VALUE", value)
                 .toString();
     }
 }
