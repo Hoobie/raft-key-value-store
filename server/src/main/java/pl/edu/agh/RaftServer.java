@@ -180,7 +180,7 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(SetValue.class), sv -> {
-                    LogEntry entry = new LogEntry(KeyValueStoreAction.SET, sv.getKey(), sv.getValue());
+                    LogEntry entry = new LogEntry(KeyValueStoreAction.SET, sv.getKey(), sv.getValue(), currentTerm);
                     entry = logArchive.appendLog(entry);
                     messagesToNeighbors.add(entry);
                     return Optional.empty();
@@ -188,7 +188,7 @@ public class RaftServer {
                 Case(instanceOf(RemoveValue.class), rv -> {
                     if (!keyValueStore.containsKey(rv.getKey()))
                         return Optional.of(new KeyNotInStoreResponse(rv.getKey()));
-                    LogEntry entry = new LogEntry(KeyValueStoreAction.REMOVE, rv.getKey());
+                    LogEntry entry = new LogEntry(KeyValueStoreAction.REMOVE, rv.getKey(), currentTerm);
                     entry = logArchive.appendLog(entry);
                     messagesToNeighbors.add(entry);
                     return Optional.empty();

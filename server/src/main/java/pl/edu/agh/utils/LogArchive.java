@@ -16,7 +16,7 @@ public class LogArchive {
     }
 
     public LogEntry appendLog(LogEntry entry) {
-        entry.setId(pendingEntries.size() + commitedEntries.size() + 1);
+        entry.setId(getLasLogIdx() + 1);
         pendingEntries.put(entry, NO_SERVERS_RECEIVED_ENTRY);
         return entry;
     }
@@ -40,5 +40,19 @@ public class LogArchive {
     public void commitEntry(LogEntry entry) {
         pendingEntries.entrySet().removeIf(e -> e.getKey().getId() == entry.getId());
         commitedEntries.add(entry);
+    }
+
+    public int getLasLogIdx() {
+        return pendingEntries.size() + commitedEntries.size();
+    }
+
+    public int getLastLogTerm() {
+        Optional<LogEntry> pendingEntryWithMaxTerm = pendingEntries.keySet().stream().max((l1, l2) -> Integer.valueOf(l1.getTerm()).compareTo(l2.getTerm()));
+        Optional<LogEntry> commitedEntryWithMaxTerm = commitedEntries.stream().max((l1, l2) -> Integer.valueOf(l1.getTerm()).compareTo(l2.getTerm()));
+        int maxTerm = Integer.MIN_VALUE;
+        maxTerm = (pendingEntryWithMaxTerm.isPresent()) ? pendingEntryWithMaxTerm.get().getTerm() : maxTerm;
+        maxTerm = (commitedEntryWithMaxTerm.isPresent()) ? Math.max(maxTerm, pendingEntryWithMaxTerm.get().getTerm()) : maxTerm;
+
+        return maxTerm;
     }
 }
