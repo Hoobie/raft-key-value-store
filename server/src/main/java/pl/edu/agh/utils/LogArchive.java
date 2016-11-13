@@ -8,15 +8,15 @@ public class LogArchive {
     private static final int NO_SERVERS_RECEIVED_ENTRY = 0;
 
     private final Map<LogEntry, Integer> pendingEntries;
-    private final List<LogEntry> commitedEntries;
+    private final List<LogEntry> committedEntries;
 
     public LogArchive() {
         pendingEntries = new HashMap<>();
-        commitedEntries = new ArrayList<>();
+        committedEntries = new ArrayList<>();
     }
 
     public LogEntry appendLog(LogEntry entry) {
-        entry.setId(pendingEntries.size() + commitedEntries.size() + 1);
+        entry.setId(getLasLogIdx() + 1);
         pendingEntries.put(entry, NO_SERVERS_RECEIVED_ENTRY);
         return entry;
     }
@@ -39,6 +39,25 @@ public class LogArchive {
 
     public void commitEntry(LogEntry entry) {
         pendingEntries.entrySet().removeIf(e -> e.getKey().getId() == entry.getId());
-        commitedEntries.add(entry);
+        committedEntries.add(entry);
+    }
+
+    public int getLasLogIdx() {
+        return pendingEntries.size() + committedEntries.size() - 1;
+    }
+
+    public long getLastCommittedIdx() {
+        Optional<LogEntry> committedEntryWithMaxId = committedEntries.stream().max((l1, l2) -> Long.valueOf(l1.getId()).compareTo(l2.getId()));
+        return (committedEntryWithMaxId.isPresent()) ? committedEntryWithMaxId.get().getId() : -1;
+    }
+
+    public int getLastLogTerm() {
+        Optional<LogEntry> pendingEntryWithMaxTerm = pendingEntries.keySet().stream().max((l1, l2) -> Integer.valueOf(l1.getTerm()).compareTo(l2.getTerm()));
+        Optional<LogEntry> committedEntryWithMaxTerm = committedEntries.stream().max((l1, l2) -> Integer.valueOf(l1.getTerm()).compareTo(l2.getTerm()));
+        int maxTerm = Integer.MIN_VALUE;
+        maxTerm = (pendingEntryWithMaxTerm.isPresent()) ? pendingEntryWithMaxTerm.get().getTerm() : maxTerm;
+        maxTerm = (committedEntryWithMaxTerm.isPresent()) ? Math.max(maxTerm, pendingEntryWithMaxTerm.get().getTerm()) : maxTerm;
+
+        return maxTerm;
     }
 }

@@ -123,18 +123,20 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(AppendEntries.class), ae -> {
-                    // TODO: check content and perform proper actions
-                    // Heartbeat
-                    AppendEntriesResponse response = new AppendEntriesResponse();
-                    if (ae.term >= currentTerm) {
-                        LOGGER.info("The leader have spoken");
-                        state = State.FOLLOWER;
-                        timeout.cancel(false);
-                        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
-                    }
-                    return Optional.of(response);
+                    LogEntry logEntry = ae.getLogEntry();
+                    if (logEntry == null) {
+                        // Heartbeat
+                        AppendEntriesResponse response = new AppendEntriesResponse();
+                        if (ae.term >= currentTerm) {
+                            LOGGER.info("The leader have spoken");
+                            state = State.FOLLOWER;
+                            timeout.cancel(false);
+                            timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
+                        }
+                        return Optional.of(response);
+                    } else
+                        return handleLogEntry(logEntry);
                 }),
-                Case(instanceOf(LogEntry.class), this::handleLogEntry),
                 Case(instanceOf(CommitEntry.class), ce -> {
                     LogEntry entry = ce.getLogEntry();
                     commitEntry(entry);
@@ -180,17 +182,17 @@ public class RaftServer {
                     return Optional.of(response);
                 }),
                 Case(instanceOf(SetValue.class), sv -> {
-                    LogEntry entry = new LogEntry(KeyValueStoreAction.SET, sv.getKey(), sv.getValue());
+                    LogEntry entry = new LogEntry(KeyValueStoreAction.SET, sv.getKey(), sv.getValue(), currentTerm);
                     entry = logArchive.appendLog(entry);
-                    messagesToNeighbors.add(entry);
+                    messagesToNeighbors.add(new AppendEntries(entry));
                     return Optional.empty();
                 }),
                 Case(instanceOf(RemoveValue.class), rv -> {
                     if (!keyValueStore.containsKey(rv.getKey()))
                         return Optional.of(new KeyNotInStoreResponse(rv.getKey()));
-                    LogEntry entry = new LogEntry(KeyValueStoreAction.REMOVE, rv.getKey());
+                    LogEntry entry = new LogEntry(KeyValueStoreAction.REMOVE, rv.getKey(), currentTerm);
                     entry = logArchive.appendLog(entry);
-                    messagesToNeighbors.add(entry);
+                    messagesToNeighbors.add(new AppendEntries(entry));
                     return Optional.empty();
                 }),
                 Case($(), o -> Optional.empty())

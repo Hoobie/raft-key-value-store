@@ -5,22 +5,25 @@ import pl.edu.agh.messages.RaftMessage;
 
 public class LogEntry implements RaftMessage {
     private long id = -1;
+    private int term;
     private KeyValueStoreAction action;
     private String key;
     private int value;
 
-    public LogEntry(KeyValueStoreAction action, String key, int value) {
+    public LogEntry(KeyValueStoreAction action, String key, int value, int term) {
         this.action = action;
         this.key = key;
         this.value = value;
+        this.term = term;
     }
 
     /**
      * Constructor for event of removing value (new value is not needed here)
      */
-    public LogEntry(KeyValueStoreAction action, String key) {
+    public LogEntry(KeyValueStoreAction action, String key, int term) {
         this.action = action;
         this.key = key;
+        this.term = term;
     }
 
     public void setId(long id) {
@@ -30,6 +33,10 @@ public class LogEntry implements RaftMessage {
     public long getId() {
         if (id == -1) throw new IllegalStateException("Log entry ID has to be set!");
         return id;
+    }
+
+    public int getTerm() {
+        return term;
     }
 
     public KeyValueStoreAction getAction() {
