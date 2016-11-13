@@ -1,6 +1,5 @@
 dependencies {
     compile project(':common')
-    compile project(':server')
     compile group: 'io.javaslang', name: 'javaslang', version: '2.0.4'
 }
 
