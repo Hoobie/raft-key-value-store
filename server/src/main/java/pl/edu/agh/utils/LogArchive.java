@@ -1,14 +1,9 @@
 package pl.edu.agh.utils;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import pl.edu.agh.logs.LogEntry;
 
 import java.util.*;
 
-/**
- * Created by Andrzej on 2016-11-03.
- */
 public class LogArchive {
     private static final int NO_SERVERS_RECEIVED_ENTRY = 0;
 

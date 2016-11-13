@@ -2,9 +2,6 @@ package pl.edu.agh.messages.client;
 
 import com.google.common.base.MoreObjects;
 
-/**
- * Created by Andrzej on 2016-11-03.
- */
 public class SetValue implements ClientMessage {
     private String key;
     private int value;

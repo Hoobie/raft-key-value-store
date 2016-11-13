@@ -1,8 +1,5 @@
 package pl.edu.agh.messages.client;
 
-/**
- * Created by Andrzej on 2016-11-11.
- */
 public class KeyNotInStoreResponse implements ClientMessage {
     private String key;
 

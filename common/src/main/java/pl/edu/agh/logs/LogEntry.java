@@ -3,9 +3,6 @@ package pl.edu.agh.logs;
 import com.google.common.base.MoreObjects;
 import pl.edu.agh.messages.RaftMessage;
 
-/**
- * Created by Andrzej on 2016-11-03.
- */
 public class LogEntry implements RaftMessage {
     private long id = -1;
     private KeyValueStoreAction action;

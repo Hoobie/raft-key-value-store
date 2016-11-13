@@ -9,9 +9,6 @@ import pl.edu.agh.utils.ThreadUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Created by Andrzej on 2016-11-11.
- */
 public class RaftClientTest {
 
     private static final int VALUE = 1;

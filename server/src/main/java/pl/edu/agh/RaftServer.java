@@ -1,7 +1,5 @@
 package pl.edu.agh;
 
-import com.google.common.collect.Maps;
-import com.google.common.collect.Queues;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.channel.Connection;
