@@ -1,3 +1,11 @@
 dependencies {
     compile project(':common')
+    compile group: 'io.javaslang', name: 'javaslang', version: '2.0.4'
+}
+
+task runClient (type: JavaExec) {
+    description = "Testing deployment of client"
+    args 'localhost:12345', 'localhost:12346', 'localhost:12347'
+    main = "pl.edu.agh.RaftClient"
+    classpath = sourceSets.main.runtimeClasspath
 }

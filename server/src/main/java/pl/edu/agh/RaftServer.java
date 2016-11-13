@@ -6,30 +6,28 @@ import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
 import io.reactivex.netty.protocol.tcp.server.TcpServer;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import pl.edu.agh.messages.DummyMessage;
+import pl.edu.agh.logs.KeyValueStoreAction;
+import pl.edu.agh.logs.LogEntry;
 import pl.edu.agh.messages.RaftMessage;
+import pl.edu.agh.messages.client.*;
 import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
 import pl.edu.agh.messages.replication.AppendEntriesResponse;
+import pl.edu.agh.messages.replication.CommitEntry;
+import pl.edu.agh.utils.LogArchive;
 import pl.edu.agh.utils.MessageUtils;
 import pl.edu.agh.utils.SocketAddressUtils;
 import rx.Observable;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.nio.charset.Charset;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -49,14 +47,18 @@ public class RaftServer {
     private static final ScheduledExecutorService TIMEOUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
 
     private final SocketAddress localAddress;
-    private final TcpServer<ByteBuf, ByteBuf> tcpServer;
     private final Map<SocketAddress, Connection<ByteBuf, ByteBuf>> serverConnections;
+    private Connection<ByteBuf, ByteBuf> clientConnection;
 
     private State state = State.FOLLOWER;
     private int currentTerm = 0;
     private AtomicInteger votesCount = new AtomicInteger(0);
     private SocketAddress votedFor;
     private ScheduledFuture timeout;
+
+    private final Map<String, Integer> keyValueStore = new HashMap<>();
+    private final LogArchive logArchive = new LogArchive();
+    private final Queue<RaftMessage> messagesToNeighbors = new ConcurrentLinkedQueue<>();
 
     public static void main(final String[] args) {
         Pair<String, Integer> localAddress = SocketAddressUtils.splitHostAndPort(args[0]);
@@ -65,7 +67,7 @@ public class RaftServer {
     }
 
     public RaftServer(String host, int port, String... serversHostsAndPorts) {
-        tcpServer = createTcpServer(port);
+        createTcpServer(port);
         this.localAddress = new InetSocketAddress(host, port);
 
         serverConnections = Arrays.stream(serversHostsAndPorts)
@@ -86,14 +88,27 @@ public class RaftServer {
     private TcpServer<ByteBuf, ByteBuf> createTcpServer(int port) {
         TcpServer<ByteBuf, ByteBuf> tcpServer = TcpServer.newServer(port);
         tcpServer.enableWireLogging("server", LogLevel.DEBUG)
-                .start(connection -> connection.writeBytesAndFlushOnEach(connection.getInput()
-                        .map(MessageUtils::toObject)
-                        .map(this::handleRequest)
-                        .filter(Optional::isPresent)
-                        .map(Optional::get)
-                        .map(SerializationUtils::serialize)
-                ));
+                .start(connection -> {
+                            checkIfClient(connection);
+                            return connection.writeStringAndFlushOnEach(connection.getInput()
+                                    .map(bb -> bb.toString(Charset.defaultCharset()))
+                                    .map(MessageUtils::toObject)
+                                    .map(this::handleRequest)
+                                    .filter(Optional::isPresent)
+                                    .map(Optional::get)
+                                    .map(MessageUtils::toString));
+                        }
+                );
         return tcpServer;
+    }
+
+    private void checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
+        long count = (serverConnections == null) ? 0 : serverConnections.keySet()
+                .stream()
+                .filter(socketAddress -> !socketAddress.toString().equals(connection.unsafeNettyChannel().remoteAddress().toString()))
+                .count();
+
+        if (count > 0) clientConnection = connection;
     }
 
     private Optional<RaftMessage> handleRequest(Object obj) {
@@ -109,7 +124,7 @@ public class RaftServer {
                 }),
                 Case(instanceOf(AppendEntries.class), ae -> {
                     // TODO: check content and perform proper actions
-                    // for now it is only a heartbeat
+                    // Heartbeat
                     AppendEntriesResponse response = new AppendEntriesResponse();
                     if (ae.term >= currentTerm) {
                         LOGGER.info("The leader have spoken");
@@ -119,7 +134,65 @@ public class RaftServer {
                     }
                     return Optional.of(response);
                 }),
-                Case(instanceOf(DummyMessage.class), Optional::of),
+                Case(instanceOf(LogEntry.class), this::handleLogEntry),
+                Case(instanceOf(CommitEntry.class), ce -> {
+                    LogEntry entry = ce.getLogEntry();
+                    commitEntry(entry);
+                    return Optional.empty();
+                }),
+                Case(instanceOf(ClientMessage.class), cm -> {
+                    if (state == State.LEADER)
+                        return handleClientMessage(cm);
+                    return Optional.empty();
+                }),
+                Case($(), o -> Optional.empty())
+        );
+    }
+
+    private void commitEntry(LogEntry entry) {
+        LOGGER.info("Commit entry: " + entry);
+        logArchive.commitEntry(entry);
+        switch (entry.getAction()) {
+            case SET:
+                keyValueStore.put(entry.getKey(), entry.getValue());
+                break;
+            case REMOVE:
+                keyValueStore.remove(entry.getKey());
+                break;
+        }
+    }
+
+    private Optional<RaftMessage> handleLogEntry(LogEntry entry) {
+        LOGGER.info("Received logEntry: " + entry);
+        entry = logArchive.appendLog(entry);
+        AppendEntriesResponse response = new AppendEntriesResponse(entry);
+        return Optional.of(response);
+    }
+
+    private Optional<RaftMessage> handleClientMessage(ClientMessage cm) {
+        LOGGER.info("I'm a leader and I got this client message: " + cm.toString());
+
+        return Match(cm).of(
+                Case(instanceOf(GetValue.class), gv -> {
+                    if (!keyValueStore.containsKey(gv.getKey()))
+                        return Optional.of(new KeyNotInStoreResponse(gv.getKey()));
+                    GetValueResponse response = new GetValueResponse(keyValueStore.get(gv.getKey()));
+                    return Optional.of(response);
+                }),
+                Case(instanceOf(SetValue.class), sv -> {
+                    LogEntry entry = new LogEntry(KeyValueStoreAction.SET, sv.getKey(), sv.getValue());
+                    entry = logArchive.appendLog(entry);
+                    messagesToNeighbors.add(entry);
+                    return Optional.empty();
+                }),
+                Case(instanceOf(RemoveValue.class), rv -> {
+                    if (!keyValueStore.containsKey(rv.getKey()))
+                        return Optional.of(new KeyNotInStoreResponse(rv.getKey()));
+                    LogEntry entry = new LogEntry(KeyValueStoreAction.REMOVE, rv.getKey());
+                    entry = logArchive.appendLog(entry);
+                    messagesToNeighbors.add(entry);
+                    return Optional.empty();
+                }),
                 Case($(), o -> Optional.empty())
         );
     }
@@ -133,9 +206,7 @@ public class RaftServer {
                     .first();
 
             connection.getInput().forEach(byteBuf -> {
-                byte[] bytes = new byte[byteBuf.readableBytes()];
-                byteBuf.getBytes(0, bytes);
-                handleResponse(SerializationUtils.deserialize(bytes));
+                handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset())));
             });
 
             return connection;
@@ -162,13 +233,40 @@ public class RaftServer {
                     return null;
                 }),
                 Case(instanceOf(AppendEntriesResponse.class), aer -> {
+                    LogEntry entry = aer.getEntry();
+                    if (entry == null) {
+                        // Heartbeat response
+                    } else {
+                        handleLogEntryResponse(entry);
+                    }
                     LOGGER.info("AppendEntriesResponse received");
                     return null;
                 }),
-                Case($(), o -> {
-                    throw new IllegalArgumentException("Wrong message");
-                })
+                Case($(), o -> null)
         );
+    }
+
+    private void handleLogEntryResponse(LogEntry entry) {
+        LOGGER.info("Received logEntryResponse: " + entry);
+
+        int responsesCount = logArchive.logEntryReceived(entry);
+        if (isMajority(responsesCount)) {
+            commitEntry(entry);
+            RaftMessage response = null;
+            if (entry.getAction() == KeyValueStoreAction.REMOVE)
+                response = new RemoveValueResponse(true);
+            else if (entry.getAction() == KeyValueStoreAction.SET)
+                response = new SetValueResponse(true);
+
+            if (response != null && clientConnection != null) {
+                clientConnection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(response)))
+                        .take(1)
+                        .toBlocking()
+                        .forEach(v -> LOGGER.info("Response to client sent!"));
+            }
+
+            messagesToNeighbors.add(new CommitEntry(entry));
+        }
     }
 
     private boolean isMajority(int votesCount) {
@@ -187,7 +285,7 @@ public class RaftServer {
                 startElection();
                 break;
             case LEADER:
-                sendHeartbeat();
+                sendMessageToNeighbors();
                 break;
             default:
                 throw new IllegalStateException();
@@ -200,21 +298,22 @@ public class RaftServer {
         serverConnections.forEach((remoteAddress, connection) -> {
             votedFor = localAddress;
             RequestVote requestVote = new RequestVote(currentTerm, localAddress);
-            connection.writeBytes(Observable.just(SerializationUtils.serialize(requestVote)))
+            connection.writeString(Observable.just(MessageUtils.toString(requestVote)))
                     .take(1)
                     .toBlocking()
                     .forEach(v -> LOGGER.info("RequestVote sent"));
         });
     }
 
-    private void sendHeartbeat() {
+    private void sendMessageToNeighbors() {
+        RaftMessage message = (messagesToNeighbors.size() > 0) ? messagesToNeighbors.remove() : new AppendEntries(currentTerm);
+
         serverConnections.forEach((remoteAddress, connection) -> {
             votedFor = localAddress;
-            AppendEntries appendEntries = new AppendEntries(currentTerm);
-            connection.writeBytes(Observable.just(SerializationUtils.serialize(appendEntries)))
+            connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(message)))
                     .take(1)
                     .toBlocking()
-                    .forEach(v -> LOGGER.info("Heartbeat sent"));
+                    .forEach(v -> LOGGER.info("Message {} sent", message));
         });
     }
 
