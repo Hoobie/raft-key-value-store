@@ -16,7 +16,7 @@ public class LogArchive {
     }
 
     public LogEntry appendLog(LogEntry entry) {
-        entry.setId(getLasLogIdx() + 1);
+        entry.setId(getLastLogIdx() + 1);
         pendingEntries.put(entry, NO_SERVERS_RECEIVED_ENTRY);
         return entry;
     }
@@ -42,7 +42,7 @@ public class LogArchive {
         committedEntries.add(entry);
     }
 
-    public int getLasLogIdx() {
+    public int getLastLogIdx() {
         return pendingEntries.size() + committedEntries.size() - 1;
     }
 

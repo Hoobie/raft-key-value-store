@@ -115,11 +115,12 @@ public class RaftServer {
         return Match(obj).of(
                 Case(instanceOf(RequestVote.class), rv -> {
                     boolean granted = false;
-                    if (votedFor == null || true /*FIXME: check term and being up-to-date*/) {
+                    if (currentTerm <= rv.term && (votedFor == null || votedFor == rv.candidateAddress)
+                            && isAtLeastUpToDateAsCandidate(rv)) {
                         votedFor = rv.candidateAddress;
                         granted = true;
                     }
-                    VoteResponse response = new VoteResponse(granted);
+                    VoteResponse response = new VoteResponse(currentTerm, granted);
                     return Optional.of(response);
                 }),
                 Case(instanceOf(AppendEntries.class), ae -> {
@@ -130,6 +131,7 @@ public class RaftServer {
                         if (ae.term >= currentTerm) {
                             LOGGER.info("The leader have spoken");
                             state = State.FOLLOWER;
+                            votedFor = null;
                             timeout.cancel(false);
                             timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                         }
@@ -149,6 +151,12 @@ public class RaftServer {
                 }),
                 Case($(), o -> Optional.empty())
         );
+    }
+
+    private boolean isAtLeastUpToDateAsCandidate(RequestVote candidatesRequest) {
+        // Based on 5.4.2 paragraph of the Raft paper
+        return candidatesRequest.lastLogTerm > logArchive.getLastLogTerm() ||
+                (candidatesRequest.lastLogTerm == logArchive.getLastLogTerm() && candidatesRequest.lastLogIndex >= logArchive.getLastLogIdx());
     }
 
     private void commitEntry(LogEntry entry) {
@@ -226,7 +234,6 @@ public class RaftServer {
                     if (vr.granted && isMajority(votesCount.incrementAndGet())) {
                         LOGGER.info("Server {} became a leader", localAddress.toString());
                         state = State.LEADER;
-                        votedFor = null;
                         votesCount = new AtomicInteger(0);
                         timeout.cancel(false);
                         timeout = TIMEOUT_EXECUTOR.scheduleAtFixedRate(this::handleTimeout, 0,
@@ -298,8 +305,8 @@ public class RaftServer {
         currentTerm++;
         timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
         serverConnections.forEach((remoteAddress, connection) -> {
-            votedFor = localAddress;
-            RequestVote requestVote = new RequestVote(currentTerm, localAddress);
+            votedFor = null;
+            RequestVote requestVote = new RequestVote(currentTerm, localAddress, logArchive.getLastLogIdx(), logArchive.getLastLogTerm());
             connection.writeString(Observable.just(MessageUtils.toString(requestVote)))
                     .take(1)
                     .toBlocking()
@@ -311,7 +318,6 @@ public class RaftServer {
         RaftMessage message = (messagesToNeighbors.size() > 0) ? messagesToNeighbors.remove() : new AppendEntries(currentTerm);
 
         serverConnections.forEach((remoteAddress, connection) -> {
-            votedFor = localAddress;
             connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(message)))
                     .take(1)
                     .toBlocking()

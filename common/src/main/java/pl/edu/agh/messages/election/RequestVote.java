@@ -7,10 +7,13 @@ import java.net.SocketAddress;
 public class RequestVote implements RaftMessage {
     public int term;
     public SocketAddress candidateAddress;
-    // TODO: add last log index and term
+    public int lastLogIndex;
+    public int lastLogTerm;
 
-    public RequestVote(int term, SocketAddress candidateAddress) {
+    public RequestVote(int term, SocketAddress candidateAddress, int lastLogIndex, int lastLogTerm) {
         this.term = term;
         this.candidateAddress = candidateAddress;
+        this.lastLogIndex = lastLogIndex;
+        this.lastLogTerm = lastLogTerm;
     }
 }
