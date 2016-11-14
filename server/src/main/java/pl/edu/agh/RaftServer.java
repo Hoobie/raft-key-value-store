@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 
 import static javaslang.API.*;
 import static javaslang.Predicates.instanceOf;
+import static org.apache.commons.lang3.StringUtils.EMPTY;
 import static pl.edu.agh.utils.ThreadUtils.sleep;
 
 public class RaftServer {
@@ -96,7 +97,12 @@ public class RaftServer {
                                     .map(this::handleRequest)
                                     .filter(Optional::isPresent)
                                     .map(Optional::get)
-                                    .map(MessageUtils::toString));
+                                    .map(MessageUtils::toString)
+                                    .onErrorReturn(e -> {
+                                        LOGGER.error("Server handling error");
+                                        return EMPTY;
+                                    })
+                            );
                         }
                 );
         return tcpServer;
@@ -105,7 +111,8 @@ public class RaftServer {
     private void checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
         long count = (serverConnections == null) ? 0 : serverConnections.keySet()
                 .stream()
-                .filter(socketAddress -> !socketAddress.toString().equals(connection.unsafeNettyChannel().remoteAddress().toString()))
+                .filter(socketAddress ->
+                        !socketAddress.toString().equals(connection.getChannelPipeline().channel().remoteAddress().toString()))
                 .count();
 
         if (count > 0) clientConnection = connection;
@@ -129,7 +136,9 @@ public class RaftServer {
                         // Heartbeat
                         AppendEntriesResponse response = new AppendEntriesResponse();
                         if (ae.term >= currentTerm) {
-                            LOGGER.debug("The leader have spoken");
+                            if (state != State.FOLLOWER) LOGGER.info("The leader have spoken, becoming a follower...");
+                            else LOGGER.debug("The leader have spoken");
+
                             state = State.FOLLOWER;
                             votedFor = null;
                             timeout.cancel(false);
@@ -215,9 +224,12 @@ public class RaftServer {
                     .toBlocking()
                     .first();
 
-            connection.getInput().forEach(byteBuf -> {
-                handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset())));
-            });
+            connection.getInput()
+                    .subscribe(
+                            byteBuf -> handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset()))),
+                            error -> LOGGER.error("Error on creating connection to {}",
+                                    connection.getChannelPipeline().channel().remoteAddress())
+                    );
 
             return connection;
         } catch (Exception ignored) {
@@ -269,9 +281,11 @@ public class RaftServer {
 
             if (response != null && clientConnection != null) {
                 clientConnection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(response)))
-                        .take(1)
-                        .toBlocking()
-                        .forEach(v -> LOGGER.info("Response to client sent!"));
+                        .subscribe(
+                                v -> LOGGER.info("Response to client sent!"),
+                                e -> LOGGER.error("Error on sending response to client {}",
+                                        clientConnection.getChannelPipeline().channel().remoteAddress())
+                        );
             }
 
             messagesToNeighbors.add(new CommitEntry(entry));
@@ -308,9 +322,10 @@ public class RaftServer {
             votedFor = null;
             RequestVote requestVote = new RequestVote(currentTerm, localAddress, logArchive.getLastLogIdx(), logArchive.getLastLogTerm());
             connection.writeString(Observable.just(MessageUtils.toString(requestVote)))
-                    .take(1)
-                    .toBlocking()
-                    .forEach(v -> LOGGER.info("RequestVote sent"));
+                    .subscribe(
+                            v -> LOGGER.info("RequestVote sent"),
+                            e -> LOGGER.error("Error on sending RequestVote to {}", remoteAddress)
+                    );
         });
     }
 
@@ -319,9 +334,11 @@ public class RaftServer {
 
         serverConnections.forEach((remoteAddress, connection) ->
                 connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(message)))
-                        .take(1)
-                        .toBlocking()
-                        .forEach(v -> LOGGER.info("Message {} sent", message)));
+                        .subscribe(
+                                v -> LOGGER.info("Message {} sent", message),
+                                e -> LOGGER.error("Error on sending AppendEntries to {}", remoteAddress)
+                        )
+        );
     }
 
     private int calculateElectionTimeout() {
