@@ -251,7 +251,7 @@ public class RaftServer {
                         timeout = TIMEOUT_EXECUTOR.scheduleAtFixedRate(this::handleTimeout, 0,
                                 HEARTBEAT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
                     }
-                    return null;
+                    return Optional.empty();
                 }),
                 Case(instanceOf(AppendEntriesResponse.class), aer -> {
                     LogEntry entry = aer.getEntry();
@@ -261,9 +261,9 @@ public class RaftServer {
                         handleLogEntryResponse(entry);
                     }
                     LOGGER.debug("AppendEntriesResponse received");
-                    return null;
+                    return Optional.empty();
                 }),
-                Case($(), o -> null)
+                Case($(), o -> Optional.empty())
         );
     }
 
