@@ -317,12 +317,11 @@ public class RaftServer {
     private void sendMessageToNeighbors() {
         RaftMessage message = (messagesToNeighbors.size() > 0) ? messagesToNeighbors.remove() : new AppendEntries(currentTerm);
 
-        serverConnections.forEach((remoteAddress, connection) -> {
-            connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(message)))
-                    .take(1)
-                    .toBlocking()
-                    .forEach(v -> LOGGER.info("Message {} sent", message));
-        });
+        serverConnections.forEach((remoteAddress, connection) ->
+                connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(message)))
+                        .take(1)
+                        .toBlocking()
+                        .forEach(v -> LOGGER.info("Message {} sent", message)));
     }
 
     private int calculateElectionTimeout() {
