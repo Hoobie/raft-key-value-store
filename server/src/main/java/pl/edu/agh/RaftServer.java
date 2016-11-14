@@ -129,7 +129,7 @@ public class RaftServer {
                         // Heartbeat
                         AppendEntriesResponse response = new AppendEntriesResponse();
                         if (ae.term >= currentTerm) {
-                            LOGGER.info("The leader have spoken");
+                            LOGGER.debug("The leader have spoken");
                             state = State.FOLLOWER;
                             votedFor = null;
                             timeout.cancel(false);
@@ -248,7 +248,7 @@ public class RaftServer {
                     } else {
                         handleLogEntryResponse(entry);
                     }
-                    LOGGER.info("AppendEntriesResponse received");
+                    LOGGER.debug("AppendEntriesResponse received");
                     return null;
                 }),
                 Case($(), o -> null)
