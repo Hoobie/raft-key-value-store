@@ -1,6 +1,4 @@
-package pl.edu.agh.utils;
-
-import pl.edu.agh.logs.LogEntry;
+package pl.edu.agh.logs;
 
 import java.util.*;
 
