@@ -227,7 +227,7 @@ public class RaftServer {
             connection.getInput()
                     .subscribe(
                             byteBuf -> handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset()))),
-                            error -> LOGGER.error("Error on creating connection to {}",
+                            error -> LOGGER.error("Error on handling response from {}",
                                     connection.getChannelPipeline().channel().remoteAddress())
                     );
 
@@ -282,7 +282,8 @@ public class RaftServer {
             if (response != null && clientConnection != null) {
                 clientConnection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(response)))
                         .subscribe(
-                                v -> LOGGER.info("Response to client sent!"),
+                                n -> LOGGER.info("Response to client sent to {}",
+                                        clientConnection.getChannelPipeline().channel().remoteAddress()),
                                 e -> LOGGER.error("Error on sending response to client {}",
                                         clientConnection.getChannelPipeline().channel().remoteAddress())
                         );
@@ -323,7 +324,7 @@ public class RaftServer {
             RequestVote requestVote = new RequestVote(currentTerm, localAddress, logArchive.getLastLogIdx(), logArchive.getLastLogTerm());
             connection.writeString(Observable.just(MessageUtils.toString(requestVote)))
                     .subscribe(
-                            v -> LOGGER.info("RequestVote sent"),
+                            n -> LOGGER.info("RequestVote sent to {}", remoteAddress),
                             e -> LOGGER.error("Error on sending RequestVote to {}", remoteAddress)
                     );
         });
@@ -335,7 +336,7 @@ public class RaftServer {
         serverConnections.forEach((remoteAddress, connection) ->
                 connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(message)))
                         .subscribe(
-                                v -> LOGGER.info("Message {} sent", message),
+                                n -> LOGGER.info("Message {} sent to {}", message, remoteAddress),
                                 e -> LOGGER.error("Error on sending AppendEntries to {}", remoteAddress)
                         )
         );
