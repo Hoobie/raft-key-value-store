@@ -11,8 +11,10 @@ import org.slf4j.LoggerFactory;
 import pl.edu.agh.messages.client.*;
 import pl.edu.agh.utils.MessageUtils;
 import pl.edu.agh.utils.SocketAddressUtils;
+import pl.edu.agh.utils.ThreadUtils;
 import rx.Observable;
 
+import java.net.SocketAddress;
 import java.nio.charset.Charset;
 import java.util.List;
 
@@ -36,6 +38,7 @@ public class RaftClient {
 
     public RaftClient(String... serverAddresses) {
         Connection<ByteBuf, ByteBuf> connection;
+        String[] connectionAddress = new String[1];
         Pair<String, Integer> address;
         for (String addressString : serverAddresses) {
             try {
@@ -45,8 +48,9 @@ public class RaftClient {
                         .createConnectionRequest()
                         .toBlocking()
                         .first();
+                connectionAddress[0] = connection.getChannelPipeline().channel().remoteAddress().toString();
                 connection.getInput().forEach(byteBuf -> {
-                    handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset())));
+                    handleResponse(connectionAddress[0], MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset())));
                 });
 
                 serverConnections.add(connection);
@@ -60,25 +64,25 @@ public class RaftClient {
         this.callback = callback;
     }
 
-    private void handleResponse(Object obj) {
+    private void handleResponse(String connection, Object obj) {
         Match(obj).of(
                 Case(instanceOf(GetValueResponse.class), gv -> {
-                    LOGGER.info("Get Value response {} ", gv.getValue());
+                    LOGGER.info("Get Value response {} from {} ", gv.getValue(), connection);
                     if (callback != null) callback.onValueGet(gv.getValue());
                     return null;
                 }),
                 Case(instanceOf(SetValueResponse.class), sv -> {
-                    LOGGER.info("Set Value response {}", sv.isSuccessful());
+                    LOGGER.info("Set Value response {} from {}", sv.isSuccessful(), connection);
                     if (callback != null) callback.onValueSet(sv.isSuccessful());
                     return null;
                 }),
                 Case(instanceOf(RemoveValueResponse.class), rv -> {
-                    LOGGER.info("Remove Value response {} ", rv.isSuccessful());
+                    LOGGER.info("Remove Value response {} from {}", rv.isSuccessful(), connection);
                     if (callback != null) callback.onValueRemoved(rv.isSuccessful());
                     return null;
                 }),
                 Case(instanceOf(KeyNotInStoreResponse.class), kn -> {
-                    LOGGER.error("Key {} is not in store!", kn.getKey());
+                    LOGGER.error("Key {} is not in store response from {}", kn.getKey(), connection);
                     if (callback != null) callback.onKeyNotInStore(kn.getKey());
                     return null;
                 }),
