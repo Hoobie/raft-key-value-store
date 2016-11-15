@@ -99,7 +99,7 @@ public class RaftServer {
                                     .map(Optional::get)
                                     .map(MessageUtils::toString)
                                     .onErrorReturn(e -> {
-                                        LOGGER.error("Server handling error");
+                                        LOGGER.error("Server handling error", e);
                                         return EMPTY;
                                     })
                             );
@@ -233,7 +233,7 @@ public class RaftServer {
                     .subscribe(
                             byteBuf -> handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset()))),
                             error -> LOGGER.error("Error on handling response from {}",
-                                    connection.getChannelPipeline().channel().remoteAddress())
+                                    connection.getChannelPipeline().channel().remoteAddress(), error)
                     );
 
             return connection;
@@ -290,7 +290,7 @@ public class RaftServer {
                                 n -> LOGGER.info("Response sent to client {}",
                                         clientConnection.getChannelPipeline().channel().remoteAddress()),
                                 e -> LOGGER.error("Error on sending response to client {}",
-                                        clientConnection.getChannelPipeline().channel().remoteAddress())
+                                        clientConnection.getChannelPipeline().channel().remoteAddress(), e)
                         );
             }
 
