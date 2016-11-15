@@ -77,7 +77,7 @@ public class RaftServer {
                     Connection<ByteBuf, ByteBuf> tcpConnection = createTcpConnection(hostAndPort.getLeft(), hostAndPort.getRight());
                     return Pair.of(tcpConnection.getChannelPipeline().channel().remoteAddress(), tcpConnection);
                 })
-                .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+                .collect(Collectors.toConcurrentMap(Pair::getLeft, Pair::getRight));
 
         timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
     }
@@ -90,7 +90,19 @@ public class RaftServer {
         TcpServer<ByteBuf, ByteBuf> tcpServer = TcpServer.newServer(port);
         tcpServer.enableWireLogging("server", LogLevel.DEBUG)
                 .start(connection -> {
-                            checkIfClient(connection);
+                            if (!checkIfClient(connection)) {
+                                SocketAddress remoteAddress = connection.getChannelPipeline().channel().remoteAddress();
+                                if (serverConnections != null) {
+                                    Optional<SocketAddress> c = serverConnections.keySet().stream()
+                                            .filter(k -> k.equals(remoteAddress))
+                                            .findFirst();
+                                    if (c.isPresent()) {
+                                        serverConnections.remove(c.get());
+                                        serverConnections.put(remoteAddress, connection);
+                                        LOGGER.info("Replaced a server's connection {}", remoteAddress);
+                                    }
+                                }
+                            }
                             return connection.writeStringAndFlushOnEach(connection.getInput()
                                     .map(bb -> bb.toString(Charset.defaultCharset()))
                                     .map(MessageUtils::toObject)
@@ -108,14 +120,18 @@ public class RaftServer {
         return tcpServer;
     }
 
-    private void checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
+    private boolean checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
         long count = (serverConnections == null) ? 0 : serverConnections.keySet()
                 .stream()
                 .filter(socketAddress ->
                         !socketAddress.toString().equals(connection.getChannelPipeline().channel().remoteAddress().toString()))
                 .count();
 
-        if (count > 0) clientConnection = connection;
+        if (count > 0) {
+            clientConnection = connection;
+            return true;
+        }
+        return false;
     }
 
     private Optional<RaftMessage> handleRequest(Object obj) {
@@ -141,7 +157,8 @@ public class RaftServer {
 
                             state = State.FOLLOWER;
                             votedFor = null;
-                            timeout.cancel(false);
+                            if (timeout != null)
+                                timeout.cancel(false);
                             timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                         }
                         return Optional.of(response);
