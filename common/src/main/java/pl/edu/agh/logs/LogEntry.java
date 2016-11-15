@@ -31,7 +31,6 @@ public class LogEntry implements RaftMessage {
     }
 
     public long getId() {
-        if (id == -1) throw new IllegalStateException("Log entry ID has to be set!");
         return id;
     }
 
