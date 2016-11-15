@@ -287,7 +287,7 @@ public class RaftServer {
             if (response != null && clientConnection != null) {
                 clientConnection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(response)))
                         .subscribe(
-                                n -> LOGGER.info("Response to client sent to {}",
+                                n -> LOGGER.info("Response sent to client {}",
                                         clientConnection.getChannelPipeline().channel().remoteAddress()),
                                 e -> LOGGER.error("Error on sending response to client {}",
                                         clientConnection.getChannelPipeline().channel().remoteAddress())
