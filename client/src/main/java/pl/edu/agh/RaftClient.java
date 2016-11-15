@@ -5,9 +5,11 @@ import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.channel.Connection;
 import io.reactivex.netty.protocol.tcp.client.TcpClient;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import pl.edu.agh.logs.KeyValueStoreAction;
 import pl.edu.agh.messages.client.*;
 import pl.edu.agh.utils.MessageUtils;
 import pl.edu.agh.utils.SocketAddressUtils;
@@ -30,13 +32,22 @@ public class RaftClient {
     private ClientCallback callback = null;
 
     public static void main(String[] args) {
-        if (args.length < 1)
-            throw new RuntimeException("You have to provide at least one server address and port number!");
+        if (args.length < 3)
+            throw new RuntimeException("Usage: [ACTION] [KEY] [VALUE] [SERVER_ADDRESSES]\n" +
+                    "Where ACTION = [SET/GET/REMOVE]\n" +
+                    "Where KEY is the key of element in map\n" +
+                    "Where VALUE is the new value (only if you're using SET action!)\n" +
+                    "Where SERVER_ADDRESSES is a list of server addresses in format address:port\n");
 
-        new RaftClient(args);
+        KeyValueStoreAction action = KeyValueStoreAction.valueOf(args[0].toUpperCase());
+        String key = args[1];
+        int value = (action == KeyValueStoreAction.SET) ? Integer.parseInt(args[2]) : 0;
+        int startIdx = (action == KeyValueStoreAction.SET) ? 3 : 2;
+        String[] serverAddresses = ArrayUtils.subarray(args, startIdx, args.length);
+        new RaftClient(action, key, value, serverAddresses);
     }
 
-    public RaftClient(String... serverAddresses) {
+    public RaftClient(KeyValueStoreAction action, String key, int value, String... serverAddresses) {
         Connection<ByteBuf, ByteBuf> connection;
         String[] connectionAddress = new String[1];
         Pair<String, Integer> address;
@@ -58,6 +69,20 @@ public class RaftClient {
                 // No all server may be up
             }
         }
+
+        switch (action) {
+            case SET:
+                setValue(key, value);
+                break;
+            case REMOVE:
+                removeValue(key);
+                break;
+            case GET:
+                getValue(key);
+                break;
+        }
+
+        ThreadUtils.sleep(5000);
     }
 
     public void setCallback(ClientCallback callback) {
