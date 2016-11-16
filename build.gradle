@@ -1,3 +1,6 @@
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+
 allprojects {
     apply plugin: 'java'
     group = 'pl.edu.agh'
@@ -21,3 +24,8 @@ subprojects {
         testCompile group: 'junit', name: 'junit', version: '4.11'
     }
 }
+
+task stage(dependsOn: ['build', 'clean']) {
+    tasks.getByPath(":server:runOneServer").execute()
+}
+build.mustRunAfter clean
