@@ -16,7 +16,6 @@ import pl.edu.agh.utils.SocketAddressUtils;
 import pl.edu.agh.utils.ThreadUtils;
 import rx.Observable;
 
-import java.net.SocketAddress;
 import java.nio.charset.Charset;
 import java.util.List;
 
@@ -27,7 +26,7 @@ public class RaftClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RaftClient.class);
 
-    private static List<Connection<ByteBuf, ByteBuf>> serverConnections = Lists.newArrayList();
+    private List<Connection<ByteBuf, ByteBuf>> serverConnections = Lists.newArrayList();
 
     private ClientCallback callback = null;
 
@@ -44,10 +43,12 @@ public class RaftClient {
         int value = (action == KeyValueStoreAction.SET) ? Integer.parseInt(args[2]) : 0;
         int startIdx = (action == KeyValueStoreAction.SET) ? 3 : 2;
         String[] serverAddresses = ArrayUtils.subarray(args, startIdx, args.length);
-        new RaftClient(action, key, value, serverAddresses);
+        new RaftClient(action, key, value, null, serverAddresses);
     }
 
-    public RaftClient(KeyValueStoreAction action, String key, int value, String... serverAddresses) {
+    public RaftClient(KeyValueStoreAction action, String key, Integer value, ClientCallback callback, String... serverAddresses) {
+        this.callback = callback;
+
         Connection<ByteBuf, ByteBuf> connection;
         String[] connectionAddress = new String[1];
         Pair<String, Integer> address;
@@ -60,12 +61,11 @@ public class RaftClient {
                         .toBlocking()
                         .first();
                 connectionAddress[0] = connection.getChannelPipeline().channel().remoteAddress().toString();
-                connection.getInput().forEach(byteBuf -> {
-                    handleResponse(connectionAddress[0], MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset())));
-                });
+                connection.getInput().forEach(byteBuf ->
+                        handleResponse(connectionAddress[0], MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset()))));
 
                 serverConnections.add(connection);
-            } catch (Exception ingored) {
+            } catch (Exception ignored) {
                 // No all server may be up
             }
         }
@@ -83,10 +83,6 @@ public class RaftClient {
         }
 
         ThreadUtils.sleep(5000);
-    }
-
-    public void setCallback(ClientCallback callback) {
-        this.callback = callback;
     }
 
     private void handleResponse(String connection, Object obj) {
@@ -118,7 +114,7 @@ public class RaftClient {
 
     }
 
-    public void getValue(String key) {
+    private void getValue(String key) {
         String msg = MessageUtils.toString(new GetValue(key));
         serverConnections.forEach(c -> c.writeString(Observable.just(msg))
                 .take(1)
@@ -126,7 +122,7 @@ public class RaftClient {
                 .forEach(v -> LOGGER.info("Get value request sent for key {} ", key)));
     }
 
-    public void setValue(String key, int value) {
+    private void setValue(String key, int value) {
         String msg = MessageUtils.toString(new SetValue(key, value));
         serverConnections.forEach(c -> c.writeString(Observable.just(msg))
                 .take(1)
@@ -134,7 +130,7 @@ public class RaftClient {
                 .forEach(v -> LOGGER.info("Set value request sent for key {} with value {} ", key, value)));
     }
 
-    public void removeValue(String key) {
+    private void removeValue(String key) {
         String msg = MessageUtils.toString(new RemoveValue(key));
         serverConnections.forEach(c -> c.writeString(Observable.just(msg))
                 .take(1)

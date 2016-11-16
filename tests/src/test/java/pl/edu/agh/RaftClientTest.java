@@ -1,8 +1,9 @@
 package pl.edu.agh;
 
 import org.apache.commons.lang3.tuple.Pair;
-import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import pl.edu.agh.logs.KeyValueStoreAction;
 import pl.edu.agh.utils.SocketAddressUtils;
 import pl.edu.agh.utils.ThreadUtils;
 
@@ -16,55 +17,41 @@ public class RaftClientTest {
     private static final String NOT_EXISTING_KEY = "test2";
     private static final String[] SERVER_ADDRESSES = new String[]{"localhost:12345", "localhost:12346"};
 
-    private static RaftClient client = null;
     private static int responseReceived = 0;
-    private static boolean setUp = false;
 
-    @Before
-    public void setUp() {
+    @BeforeClass
+    public static void setUp() {
         // given
-        if (!setUp) {
-            new Thread() {
-                @Override
-                public void run() {
-                    Pair<String, Integer> address = SocketAddressUtils.splitHostAndPort(SERVER_ADDRESSES[0]);
-                    new RaftServer(address.getLeft(), address.getRight(), SERVER_ADDRESSES[1]);
-                }
-            }.start();
+        new Thread() {
+            @Override
+            public void run() {
+                Pair<String, Integer> address = SocketAddressUtils.splitHostAndPort(SERVER_ADDRESSES[0]);
+                new RaftServer(address.getLeft(), address.getRight(), SERVER_ADDRESSES[1]);
+            }
+        }.start();
 
-            new Thread() {
-                @Override
-                public void run() {
-                    Pair<String, Integer> address = SocketAddressUtils.splitHostAndPort(SERVER_ADDRESSES[1]);
-                    new RaftServer(address.getLeft(), address.getRight(), SERVER_ADDRESSES[0]);
-                }
-            }.start();
+        new Thread() {
+            @Override
+            public void run() {
+                Pair<String, Integer> address = SocketAddressUtils.splitHostAndPort(SERVER_ADDRESSES[1]);
+                new RaftServer(address.getLeft(), address.getRight(), SERVER_ADDRESSES[0]);
+            }
+        }.start();
 
-            // Wait for electing leader
-            ThreadUtils.sleep(5000L);
-
-            new Thread() {
-                @Override
-                public void run() {
-                    client = new RaftClient(SERVER_ADDRESSES);
-                }
-            }.start();
-            ThreadUtils.sleep(1000);
-            setUp = true;
-        }
+        // Wait for electing leader
+        ThreadUtils.sleep(5000L);
     }
 
     @Test
     public void shouldGetCorrectValuesFromServer() {
-        // given
-        client.setCallback(correctResponseCallback);
+        responseReceived = 0;
 
         // when
-        client.setValue(KEY, VALUE);
+        new RaftClient(KeyValueStoreAction.SET, KEY, VALUE, correctResponseCallback, SERVER_ADDRESSES);
         ThreadUtils.sleep(5000);
-        client.getValue(KEY);
+        new RaftClient(KeyValueStoreAction.GET, KEY, null, correctResponseCallback, SERVER_ADDRESSES);
         ThreadUtils.sleep(5000);
-        client.removeValue(KEY);
+        new RaftClient(KeyValueStoreAction.REMOVE, KEY, null, correctResponseCallback, SERVER_ADDRESSES);
 
         // then
         // Wait for responses
@@ -76,16 +63,14 @@ public class RaftClientTest {
     public void shouldNotCrashIfKeyNotInStore() {
         // given
         responseReceived = 0;
-        client.setCallback(keyNotInStoreCallback);
 
         // when
-        client.getValue(NOT_EXISTING_KEY);
+        new RaftClient(KeyValueStoreAction.GET, NOT_EXISTING_KEY, null, keyNotInStoreCallback, SERVER_ADDRESSES);
 
         // then
         // Wait for response
         ThreadUtils.sleep(5000);
         assertEquals(responseReceived, 1);
-
     }
 
     private ClientCallback correctResponseCallback = new ClientCallback() {

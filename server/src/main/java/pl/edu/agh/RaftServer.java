@@ -211,7 +211,7 @@ public class RaftServer {
     }
 
     private Optional<RaftMessage> handleClientMessage(ClientMessage cm) {
-        LOGGER.info("I'm a leader and I got this client message: " + cm.toString());
+        LOGGER.info("I'm a leader ({}) and I got this client message: {}", localAddress, cm.toString());
 
         return Match(cm).of(
                 Case(instanceOf(GetValue.class), gv -> {
