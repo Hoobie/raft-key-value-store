@@ -163,13 +163,15 @@ public class RaftServer {
                         }
                         return Optional.of(response);
                     } else {
-                        timeout.cancel(false);
+                        if (timeout != null)
+                            timeout.cancel(false);
                         timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                         return handleLogEntry(logEntry);
                     }
                 }),
                 Case(instanceOf(CommitEntry.class), ce -> {
-                    timeout.cancel(false);
+                    if (timeout != null)
+                        timeout.cancel(false);
                     timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                     LogEntry entry = ce.getLogEntry();
                     commitEntry(entry);
