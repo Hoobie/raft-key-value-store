@@ -29,6 +29,7 @@ public class RaftClient {
     private List<Connection<ByteBuf, ByteBuf>> serverConnections = Lists.newArrayList();
 
     private ClientCallback callback = null;
+    private KeyValueStoreAction waitingFor = null;
 
     public static void main(String[] args) {
         if (args.length < 3)
@@ -70,22 +71,27 @@ public class RaftClient {
             }
         }
 
-        switch (action) {
-            case SET:
-                setValue(key, value);
-                break;
-            case REMOVE:
-                removeValue(key);
-                break;
-            case GET:
-                getValue(key);
-                break;
-        }
+        waitingFor = action;
+        while (waitingFor != null) {
+            LOGGER.info("Client sending request {}", action);
+            switch (action) {
+                case SET:
+                    setValue(key, value);
+                    break;
+                case REMOVE:
+                    removeValue(key);
+                    break;
+                case GET:
+                    getValue(key);
+                    break;
+            }
 
-        ThreadUtils.sleep(5000);
+            ThreadUtils.sleep(5000);
+        }
     }
 
     private void handleResponse(String connection, Object obj) {
+        waitingFor = null;
         Match(obj).of(
                 Case(instanceOf(GetValueResponse.class), gv -> {
                     LOGGER.info("Get Value response {} from {} ", gv.getValue(), connection);

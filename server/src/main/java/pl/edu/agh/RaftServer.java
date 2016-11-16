@@ -104,7 +104,11 @@ public class RaftServer {
                                 }
                             }
                             return connection.writeStringAndFlushOnEach(connection.getInput()
-                                    .map(bb -> bb.toString(Charset.defaultCharset()))
+                                    .map(bb -> {
+                                        String stringRepr = bb.toString(Charset.defaultCharset());
+                                        bb.release();
+                                        return stringRepr;
+                                    })
                                     .map(MessageUtils::toObject)
                                     .map(this::handleRequest)
                                     .filter(Optional::isPresent)
@@ -250,7 +254,10 @@ public class RaftServer {
 
             connection.getInput()
                     .subscribe(
-                            byteBuf -> handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset()))),
+                            byteBuf -> {
+                                handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset())));
+                                byteBuf.release();
+                            },
                             error -> LOGGER.error("Error on handling response from {}",
                                     connection.getChannelPipeline().channel().remoteAddress(), error)
                     );
