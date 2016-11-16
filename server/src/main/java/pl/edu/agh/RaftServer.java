@@ -10,6 +10,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pl.edu.agh.logs.KeyValueStoreAction;
+import pl.edu.agh.logs.LogArchive;
 import pl.edu.agh.logs.LogEntry;
 import pl.edu.agh.messages.RaftMessage;
 import pl.edu.agh.messages.client.*;
@@ -18,7 +19,6 @@ import pl.edu.agh.messages.election.VoteResponse;
 import pl.edu.agh.messages.replication.AppendEntries;
 import pl.edu.agh.messages.replication.AppendEntriesResponse;
 import pl.edu.agh.messages.replication.CommitEntry;
-import pl.edu.agh.utils.LogArchive;
 import pl.edu.agh.utils.MessageUtils;
 import pl.edu.agh.utils.SocketAddressUtils;
 import rx.Observable;
@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 
 import static javaslang.API.*;
 import static javaslang.Predicates.instanceOf;
+import static org.apache.commons.lang3.StringUtils.EMPTY;
 import static pl.edu.agh.utils.ThreadUtils.sleep;
 
 public class RaftServer {
@@ -76,7 +77,7 @@ public class RaftServer {
                     Connection<ByteBuf, ByteBuf> tcpConnection = createTcpConnection(hostAndPort.getLeft(), hostAndPort.getRight());
                     return Pair.of(tcpConnection.getChannelPipeline().channel().remoteAddress(), tcpConnection);
                 })
-                .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+                .collect(Collectors.toConcurrentMap(Pair::getLeft, Pair::getRight));
 
         timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
     }
@@ -89,26 +90,48 @@ public class RaftServer {
         TcpServer<ByteBuf, ByteBuf> tcpServer = TcpServer.newServer(port);
         tcpServer.enableWireLogging("server", LogLevel.DEBUG)
                 .start(connection -> {
-                            checkIfClient(connection);
+                            if (!checkIfClient(connection)) {
+                                SocketAddress remoteAddress = connection.getChannelPipeline().channel().remoteAddress();
+                                if (serverConnections != null) {
+                                    Optional<SocketAddress> c = serverConnections.keySet().stream()
+                                            .filter(k -> k.equals(remoteAddress))
+                                            .findFirst();
+                                    if (c.isPresent()) {
+                                        serverConnections.remove(c.get());
+                                        serverConnections.put(remoteAddress, connection);
+                                        LOGGER.info("Replaced a server's connection {}", remoteAddress);
+                                    }
+                                }
+                            }
                             return connection.writeStringAndFlushOnEach(connection.getInput()
                                     .map(bb -> bb.toString(Charset.defaultCharset()))
                                     .map(MessageUtils::toObject)
                                     .map(this::handleRequest)
                                     .filter(Optional::isPresent)
                                     .map(Optional::get)
-                                    .map(MessageUtils::toString));
+                                    .map(MessageUtils::toString)
+                                    .onErrorReturn(e -> {
+                                        LOGGER.error("Server handling error", e);
+                                        return EMPTY;
+                                    })
+                            );
                         }
                 );
         return tcpServer;
     }
 
-    private void checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
+    private boolean checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
         long count = (serverConnections == null) ? 0 : serverConnections.keySet()
                 .stream()
-                .filter(socketAddress -> !socketAddress.toString().equals(connection.unsafeNettyChannel().remoteAddress().toString()))
+                .filter(socketAddress ->
+                        !socketAddress.toString().equals(connection.getChannelPipeline().channel().remoteAddress().toString()))
                 .count();
 
-        if (count > 0) clientConnection = connection;
+        if (count > 0) {
+            clientConnection = connection;
+            return true;
+        }
+        return false;
     }
 
     private Optional<RaftMessage> handleRequest(Object obj) {
@@ -129,17 +152,27 @@ public class RaftServer {
                         // Heartbeat
                         AppendEntriesResponse response = new AppendEntriesResponse();
                         if (ae.term >= currentTerm) {
-                            LOGGER.info("The leader have spoken");
+                            if (state != State.FOLLOWER) LOGGER.info("The leader have spoken, becoming a follower...");
+                            else LOGGER.debug("The leader have spoken");
+
                             state = State.FOLLOWER;
                             votedFor = null;
-                            timeout.cancel(false);
+                            if (timeout != null)
+                                timeout.cancel(false);
                             timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                         }
                         return Optional.of(response);
-                    } else
+                    } else {
+                        if (timeout != null)
+                            timeout.cancel(false);
+                        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                         return handleLogEntry(logEntry);
+                    }
                 }),
                 Case(instanceOf(CommitEntry.class), ce -> {
+                    if (timeout != null)
+                        timeout.cancel(false);
+                    timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
                     LogEntry entry = ce.getLogEntry();
                     commitEntry(entry);
                     return Optional.empty();
@@ -180,7 +213,7 @@ public class RaftServer {
     }
 
     private Optional<RaftMessage> handleClientMessage(ClientMessage cm) {
-        LOGGER.info("I'm a leader and I got this client message: " + cm.toString());
+        LOGGER.info("I'm a leader ({}) and I got this client message: {}", localAddress, cm.toString());
 
         return Match(cm).of(
                 Case(instanceOf(GetValue.class), gv -> {
@@ -215,9 +248,12 @@ public class RaftServer {
                     .toBlocking()
                     .first();
 
-            connection.getInput().forEach(byteBuf -> {
-                handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset())));
-            });
+            connection.getInput()
+                    .subscribe(
+                            byteBuf -> handleResponse(MessageUtils.toObject(byteBuf.toString(Charset.defaultCharset()))),
+                            error -> LOGGER.error("Error on handling response from {}",
+                                    connection.getChannelPipeline().channel().remoteAddress(), error)
+                    );
 
             return connection;
         } catch (Exception ignored) {
@@ -239,7 +275,7 @@ public class RaftServer {
                         timeout = TIMEOUT_EXECUTOR.scheduleAtFixedRate(this::handleTimeout, 0,
                                 HEARTBEAT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
                     }
-                    return null;
+                    return Optional.empty();
                 }),
                 Case(instanceOf(AppendEntriesResponse.class), aer -> {
                     LogEntry entry = aer.getEntry();
@@ -248,10 +284,10 @@ public class RaftServer {
                     } else {
                         handleLogEntryResponse(entry);
                     }
-                    LOGGER.info("AppendEntriesResponse received");
-                    return null;
+                    LOGGER.debug("AppendEntriesResponse received");
+                    return Optional.empty();
                 }),
-                Case($(), o -> null)
+                Case($(), o -> Optional.empty())
         );
     }
 
@@ -269,9 +305,12 @@ public class RaftServer {
 
             if (response != null && clientConnection != null) {
                 clientConnection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(response)))
-                        .take(1)
-                        .toBlocking()
-                        .forEach(v -> LOGGER.info("Response to client sent!"));
+                        .subscribe(
+                                n -> LOGGER.info("Response sent to client {}",
+                                        clientConnection.getChannelPipeline().channel().remoteAddress()),
+                                e -> LOGGER.error("Error on sending response to client {}",
+                                        clientConnection.getChannelPipeline().channel().remoteAddress(), e)
+                        );
             }
 
             messagesToNeighbors.add(new CommitEntry(entry));
@@ -308,21 +347,23 @@ public class RaftServer {
             votedFor = null;
             RequestVote requestVote = new RequestVote(currentTerm, localAddress, logArchive.getLastLogIdx(), logArchive.getLastLogTerm());
             connection.writeString(Observable.just(MessageUtils.toString(requestVote)))
-                    .take(1)
-                    .toBlocking()
-                    .forEach(v -> LOGGER.info("RequestVote sent"));
+                    .subscribe(
+                            n -> LOGGER.info("RequestVote sent to {}", remoteAddress),
+                            e -> LOGGER.error("Error on sending RequestVote to {}", remoteAddress)
+                    );
         });
     }
 
     private void sendMessageToNeighbors() {
         RaftMessage message = (messagesToNeighbors.size() > 0) ? messagesToNeighbors.remove() : new AppendEntries(currentTerm);
 
-        serverConnections.forEach((remoteAddress, connection) -> {
-            connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(message)))
-                    .take(1)
-                    .toBlocking()
-                    .forEach(v -> LOGGER.info("Message {} sent", message));
-        });
+        serverConnections.forEach((remoteAddress, connection) ->
+                connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(message)))
+                        .subscribe(
+                                n -> LOGGER.info("Message {} sent to {}", message, remoteAddress),
+                                e -> LOGGER.error("Error on sending AppendEntries to {}", remoteAddress)
+                        )
+        );
     }
 
     private int calculateElectionTimeout() {

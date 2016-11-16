@@ -3,9 +3,23 @@ dependencies {
     compile group: 'io.javaslang', name: 'javaslang', version: '2.0.4'
 }
 
-task runClient (type: JavaExec) {
+task runSetClient (type: JavaExec) {
     description = "Testing deployment of client"
-    args 'localhost:12345', 'localhost:12346', 'localhost:12347'
+    args 'set', 'test', '1', 'localhost:12345', 'localhost:12346', 'localhost:12347'
+    main = "pl.edu.agh.RaftClient"
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+task runGetClient (type: JavaExec) {
+    description = "Testing deployment of client"
+    args 'get', 'test', 'localhost:12345', 'localhost:12346', 'localhost:12347'
+    main = "pl.edu.agh.RaftClient"
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+task runRemoveClient (type: JavaExec) {
+    description = "Testing deployment of client"
+    args 'remove', 'test', 'localhost:12345', 'localhost:12346', 'localhost:12347'
     main = "pl.edu.agh.RaftClient"
     classpath = sourceSets.main.runtimeClasspath
 }

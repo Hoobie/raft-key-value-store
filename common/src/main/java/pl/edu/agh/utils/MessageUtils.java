@@ -9,7 +9,7 @@ import java.io.ObjectOutputStream;
 import java.util.Base64;
 
 public class MessageUtils {
-    private static final int MAX_PARTS = 4;
+    private static final int MAX_PARTS = 20;
     private static String buffer = "";
     private static int parts = 0;
 

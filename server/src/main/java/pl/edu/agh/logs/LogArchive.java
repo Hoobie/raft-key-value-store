@@ -1,6 +1,4 @@
-package pl.edu.agh.utils;
-
-import pl.edu.agh.logs.LogEntry;
+package pl.edu.agh.logs;
 
 import java.util.*;
 
@@ -16,7 +14,8 @@ public class LogArchive {
     }
 
     public LogEntry appendLog(LogEntry entry) {
-        entry.setId(getLastLogIdx() + 1);
+        if (entry.getId() == -1)
+            entry.setId(getLastLogIdx() + 1);
         pendingEntries.put(entry, NO_SERVERS_RECEIVED_ENTRY);
         return entry;
     }
