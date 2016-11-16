@@ -44,6 +44,7 @@ public class RaftClientTest {
 
     @Test
     public void shouldGetCorrectValuesFromServer() {
+        // given
         responseReceived = 0;
 
         // when
