@@ -20,3 +20,9 @@ task runServer3 (type: JavaExec) {
     main = "pl.edu.agh.RaftServer"
     classpath = sourceSets.main.runtimeClasspath
 }
+
+task runOneServer (type: JavaExec) {
+    args 'localhost:12345'
+    main = "pl.edu.agh.RaftServer"
+    classpath = sourceSets.main.runtimeClasspath
+}
