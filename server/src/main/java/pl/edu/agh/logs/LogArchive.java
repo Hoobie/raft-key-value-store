@@ -59,4 +59,8 @@ public class LogArchive {
 
         return maxTerm;
     }
+
+    public List<LogEntry> getCommittedLogs() {
+        return committedEntries;
+    }
 }

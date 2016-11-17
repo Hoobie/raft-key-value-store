@@ -92,6 +92,7 @@ public class RaftServer {
         tcpServer.enableWireLogging("server", LogLevel.DEBUG)
                 .start(connection -> {
                             if (!checkIfClient(connection)) {
+                                bringUpToDate(connection);
                                 SocketAddress remoteAddress = connection.getChannelPipeline().channel().remoteAddress();
                                 if (serverConnections != null) {
                                     Optional<SocketAddress> c = serverConnections.keySet().stream()
@@ -123,6 +124,17 @@ public class RaftServer {
                         }
                 );
         return tcpServer;
+    }
+
+    private void bringUpToDate(Connection<ByteBuf, ByteBuf> connection) {
+        SocketAddress remoteAddress = connection.getChannelPipeline().channel().remoteAddress();
+        LOGGER.info("Bringing server {} up to date", remoteAddress);
+        logArchive.getCommittedLogs().forEach(log ->
+                connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(new CommitEntry(log))))
+                        .subscribe(
+                                n -> LOGGER.info("CommitEntry {} sent to {} as an update", log, remoteAddress),
+                                e -> LOGGER.error("Error on sending CommitEntry to {}", remoteAddress)
+                        ));
     }
 
     private boolean checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
