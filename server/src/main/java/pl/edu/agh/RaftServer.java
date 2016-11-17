@@ -353,7 +353,7 @@ public class RaftServer {
         serverConnections.forEach((remoteAddress, connection) -> {
             votedFor = null;
             RequestVote requestVote = new RequestVote(currentTerm, localAddress, logArchive.getLastLogIdx(), logArchive.getLastLogTerm());
-            connection.writeString(Observable.just(MessageUtils.toString(requestVote)))
+            connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(requestVote)))
                     .subscribe(
                             n -> LOGGER.info("RequestVote sent to {}", remoteAddress),
                             e -> LOGGER.error("Error on sending RequestVote to {}", remoteAddress)
