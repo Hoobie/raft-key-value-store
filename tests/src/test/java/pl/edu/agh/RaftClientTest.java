@@ -114,6 +114,21 @@ public class RaftClientTest {
 
     }
 
+    @Test
+    public void shouldCommitChangeOnAllServers() {
+        // given
+        // Value set while in contact with current leader
+        responseReceived = 0;
+        new RaftClient(KeyValueStoreAction.SET, KEY, VALUE, correctResponseCallback, getServerAddresses());
+        // Wait for response
+        ThreadUtils.sleep(5000);
+        assertEquals(responseReceived, 1);
+
+        // then
+        Arrays.stream(nodes).forEach(node -> Assert.assertTrue(node.getStateMachine().containsKey(KEY) && node.getStateMachine().get(KEY) == VALUE));
+
+    }
+
     private String[] getServerAddresses() {
         String[] serverAddresses = new String[2];
         serverAddresses[0] = String.format("localhost:%s", currentPort - 1);

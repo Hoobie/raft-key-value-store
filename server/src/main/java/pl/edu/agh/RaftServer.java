@@ -382,4 +382,8 @@ public class RaftServer {
     void simulateCrash() {
         timeout.cancel(true);
     }
+
+    public Map<String, Integer> getStateMachine() {
+        return keyValueStore;
+    }
 }
