@@ -55,7 +55,7 @@ public class LogArchive {
         Optional<LogEntry> committedEntryWithMaxTerm = committedEntries.stream().max((l1, l2) -> Integer.valueOf(l1.getTerm()).compareTo(l2.getTerm()));
         int maxTerm = Integer.MIN_VALUE;
         maxTerm = (pendingEntryWithMaxTerm.isPresent()) ? pendingEntryWithMaxTerm.get().getTerm() : maxTerm;
-        maxTerm = (committedEntryWithMaxTerm.isPresent()) ? Math.max(maxTerm, pendingEntryWithMaxTerm.get().getTerm()) : maxTerm;
+        maxTerm = (committedEntryWithMaxTerm.isPresent()) ? Math.max(maxTerm, committedEntryWithMaxTerm.get().getTerm()) : maxTerm;
 
         return maxTerm;
     }
