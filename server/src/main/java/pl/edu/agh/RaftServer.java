@@ -1,5 +1,6 @@
 package pl.edu.agh;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.channel.Connection;
@@ -375,5 +376,10 @@ public class RaftServer {
 
     private int calculateElectionTimeout() {
         return MIN_ELECTION_TIMEOUT_MILLIS + RAND.nextInt(MAX_ELECTION_TIMEOUT_MILLIS - MIN_ELECTION_TIMEOUT_MILLIS);
+    }
+
+    @VisibleForTesting
+    void simulateCrash() {
+        timeout.cancel(true);
     }
 }
