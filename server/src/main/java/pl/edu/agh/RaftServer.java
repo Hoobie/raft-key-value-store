@@ -386,4 +386,8 @@ public class RaftServer {
     public Map<String, Integer> getStateMachine() {
         return keyValueStore;
     }
+
+    public void restart() {
+        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
+    }
 }

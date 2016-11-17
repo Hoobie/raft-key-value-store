@@ -129,6 +129,31 @@ public class RaftClientTest {
 
     }
 
+    @Test
+    public void shouldGetUpdatedWithLogsAfterServerRevive() {
+        // given
+        // Value set while in contact with current leader
+        responseReceived = 0;
+        new RaftClient(KeyValueStoreAction.SET, KEY, VALUE, correctResponseCallback, getServerAddresses());
+        // Wait for response
+        ThreadUtils.sleep(5000L);
+        assertEquals(responseReceived, 1);
+
+        // when
+        // Kill server make change in statemachine of current leader and than revive it
+        nodes[0].simulateCrash();
+
+        responseReceived = 0;
+        new RaftClient(KeyValueStoreAction.REMOVE, KEY, null, correctResponseCallback, getServerAddresses());
+        // Wait for response
+        ThreadUtils.sleep(5000L);
+        assertEquals(responseReceived, 1);
+
+        nodes[0].restart();
+        ThreadUtils.sleep(5000L);
+        Assert.assertTrue(nodes[0].getStateMachine().containsKey(KEY) && nodes[0].getStateMachine().get(KEY) == VALUE);
+    }
+
     private String[] getServerAddresses() {
         String[] serverAddresses = new String[2];
         serverAddresses[0] = String.format("localhost:%s", currentPort - 1);
