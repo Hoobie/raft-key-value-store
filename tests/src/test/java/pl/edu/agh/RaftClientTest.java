@@ -151,7 +151,7 @@ public class RaftClientTest {
 
         // TODO: Revive it somehow w/o 'BindException: Address already in use'
         ThreadUtils.sleep(5000L);
-        Assert.assertTrue(nodes[0].getStateMachine().containsKey(KEY) && nodes[0].getStateMachine().get(KEY) == VALUE);
+        Assert.assertFalse(nodes[0].getStateMachine().containsKey(KEY));
     }
 
     private String[] getServerAddresses() {
