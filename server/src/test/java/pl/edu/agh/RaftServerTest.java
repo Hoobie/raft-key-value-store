@@ -4,6 +4,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import pl.edu.agh.utils.ThreadUtils;
 
+import java.util.Arrays;
 public class RaftServerTest {
 
     @Test
@@ -28,7 +29,9 @@ public class RaftServerTest {
         ThreadUtils.sleep(5000L);
 
         // then
-        Assert.assertTrue(nodes[0].getState() == State.LEADER || nodes[1].getState() == State.LEADER);
-        Assert.assertFalse(nodes[0].getState() == State.LEADER && nodes[1].getState() == State.LEADER);
+        long leadersAmount = Arrays.stream(nodes)
+                .filter(node -> node.getState() == State.LEADER)
+                .count();
+        Assert.assertEquals(leadersAmount, 1);
     }
 }
