@@ -3,6 +3,12 @@ dependencies {
     compile group: 'io.javaslang', name: 'javaslang', version: '2.0.4'
 }
 
+task stage (type: JavaExec) {
+    args 'localhost:8080'
+    main = "pl.edu.agh.RaftServer"
+    classpath = sourceSets.main.runtimeClasspath
+}
+
 task runServer1 (type: JavaExec) {
     args 'localhost:12345', 'localhost:12346', 'localhost:12347'
     main = "pl.edu.agh.RaftServer"
