@@ -41,6 +41,6 @@ class RunAsyncTask extends DefaultTask {
     }
 }
 
-task stage(type: RunAsyncTask, dependsOn: build) {
+task stage(type: RunAsyncTask) {
     taskToExecute = 'runSingleNodeServer'
 }
