@@ -141,7 +141,8 @@ public class RaftClientTest {
 
         // when
         // Kill server make change in statemachine of current leader and than revive it
-        // TODO: Kill the server for good
+        nodes[0].simulateCrash();
+        ThreadUtils.sleep(5000L);
 
         responseReceived = 0;
         new RaftClient(KeyValueStoreAction.REMOVE, KEY, null, correctResponseCallback, getServerAddresses());
@@ -149,7 +150,7 @@ public class RaftClientTest {
         ThreadUtils.sleep(5000L);
         assertEquals(responseReceived, 1);
 
-        // TODO: Revive it somehow w/o 'BindException: Address already in use'
+        nodes[0].restart();
         ThreadUtils.sleep(5000L);
         Assert.assertFalse(nodes[0].getStateMachine().containsKey(KEY));
     }

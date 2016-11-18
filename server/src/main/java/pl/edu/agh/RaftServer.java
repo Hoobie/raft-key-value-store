@@ -408,6 +408,7 @@ public class RaftServer {
     }
 
     public void restart() {
+        messagesToNeighbors.add(new RequestLogs());
         timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
     }
 }
