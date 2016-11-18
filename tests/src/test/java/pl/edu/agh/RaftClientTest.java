@@ -1,11 +1,17 @@
 package pl.edu.agh;
 
 import org.apache.commons.lang3.tuple.Pair;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 import pl.edu.agh.logs.KeyValueStoreAction;
 import pl.edu.agh.utils.SocketAddressUtils;
 import pl.edu.agh.utils.ThreadUtils;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -15,31 +21,32 @@ public class RaftClientTest {
     private static final int VALUE = 1;
     private static final String KEY = "test";
     private static final String NOT_EXISTING_KEY = "test2";
-    private static final String[] SERVER_ADDRESSES = new String[]{"localhost:12345", "localhost:12346"};
 
-    private static int responseReceived = 0;
+    private int responseReceived = 0;
+    private RaftServer[] nodes;
+    private ExecutorService executor;
+    private static int currentPort = 12345;
 
-    @BeforeClass
-    public static void setUp() {
-        // given
-        new Thread() {
-            @Override
-            public void run() {
-                Pair<String, Integer> address = SocketAddressUtils.splitHostAndPort(SERVER_ADDRESSES[0]);
-                new RaftServer(address.getLeft(), address.getRight(), SERVER_ADDRESSES[1]);
-            }
-        }.start();
+    @Before
+    public void setupServers() {
+        nodes = new RaftServer[2];
+        executor = Executors.newCachedThreadPool();
+        int server1Port = currentPort++;
+        int server2Port = currentPort;
+        executor.execute(() -> {
+            nodes[0] = new RaftServer("localhost", server1Port, String.format("localhost:%s", server2Port));
+        });
+        executor.execute(() -> {
+            nodes[1] = new RaftServer("localhost", server2Port, String.format("localhost:%s", server1Port));
+        });
 
-        new Thread() {
-            @Override
-            public void run() {
-                Pair<String, Integer> address = SocketAddressUtils.splitHostAndPort(SERVER_ADDRESSES[1]);
-                new RaftServer(address.getLeft(), address.getRight(), SERVER_ADDRESSES[0]);
-            }
-        }.start();
-
-        // Wait for electing leader
         ThreadUtils.sleep(5000L);
+        currentPort++;
+    }
+
+    @After
+    public void shutDownServers() {
+        Arrays.stream(nodes).forEach(RaftServer::simulateCrash);
     }
 
     @Test
@@ -48,11 +55,11 @@ public class RaftClientTest {
         responseReceived = 0;
 
         // when
-        new RaftClient(KeyValueStoreAction.SET, KEY, VALUE, correctResponseCallback, SERVER_ADDRESSES);
+        new RaftClient(KeyValueStoreAction.SET, KEY, VALUE, correctResponseCallback, getServerAddresses());
         ThreadUtils.sleep(5000);
-        new RaftClient(KeyValueStoreAction.GET, KEY, null, correctResponseCallback, SERVER_ADDRESSES);
+        new RaftClient(KeyValueStoreAction.GET, KEY, null, correctResponseCallback, getServerAddresses());
         ThreadUtils.sleep(5000);
-        new RaftClient(KeyValueStoreAction.REMOVE, KEY, null, correctResponseCallback, SERVER_ADDRESSES);
+        new RaftClient(KeyValueStoreAction.REMOVE, KEY, null, correctResponseCallback, getServerAddresses());
 
         // then
         // Wait for responses
@@ -66,12 +73,93 @@ public class RaftClientTest {
         responseReceived = 0;
 
         // when
-        new RaftClient(KeyValueStoreAction.GET, NOT_EXISTING_KEY, null, keyNotInStoreCallback, SERVER_ADDRESSES);
+        new RaftClient(KeyValueStoreAction.GET, NOT_EXISTING_KEY, null, keyNotInStoreCallback, getServerAddresses());
 
         // then
         // Wait for response
         ThreadUtils.sleep(5000);
         assertEquals(responseReceived, 1);
+    }
+
+    @Test
+    public void shouldGetCorrectValueAfterLeaderCrash() {
+        // given
+        // Value set while in contact with current leader
+        responseReceived = 0;
+        new RaftClient(KeyValueStoreAction.SET, KEY, VALUE, correctResponseCallback, getServerAddresses());
+        // Wait for response
+        ThreadUtils.sleep(5000);
+        assertEquals(responseReceived, 1);
+
+        // when
+        // Leader is killed
+        Optional<RaftServer> optionalLeader = Arrays.stream(nodes)
+                .filter(node -> node.getState() == State.LEADER)
+                .findFirst();
+        if (!optionalLeader.isPresent())
+            throw new IllegalStateException("Leader has not been chosen!");
+
+        RaftServer leader = optionalLeader.get();
+        leader.simulateCrash();
+
+        // Wait for new leader and try to get correct response
+        ThreadUtils.sleep(5000);
+        responseReceived = 0;
+        new RaftClient(KeyValueStoreAction.GET, KEY, null, correctResponseCallback, getServerAddresses());
+
+        // then
+        // Wait for response
+        ThreadUtils.sleep(5000);
+        assertEquals(responseReceived, 1);
+
+    }
+
+    @Test
+    public void shouldCommitChangeOnAllServers() {
+        // given
+        // Value set while in contact with current leader
+        responseReceived = 0;
+        new RaftClient(KeyValueStoreAction.SET, KEY, VALUE, correctResponseCallback, getServerAddresses());
+        // Wait for response
+        ThreadUtils.sleep(5000);
+        assertEquals(responseReceived, 1);
+
+        // then
+        Arrays.stream(nodes).forEach(node -> Assert.assertTrue(node.getStateMachine().containsKey(KEY) && node.getStateMachine().get(KEY) == VALUE));
+
+    }
+
+    @Test
+    public void shouldGetUpdatedWithLogsAfterServerRevive() {
+        // given
+        // Value set while in contact with current leader
+        responseReceived = 0;
+        new RaftClient(KeyValueStoreAction.SET, KEY, VALUE, correctResponseCallback, getServerAddresses());
+        // Wait for response
+        ThreadUtils.sleep(5000L);
+        assertEquals(responseReceived, 1);
+
+        // when
+        // Kill server make change in statemachine of current leader and than revive it
+        nodes[0].simulateCrash();
+        ThreadUtils.sleep(5000L);
+
+        responseReceived = 0;
+        new RaftClient(KeyValueStoreAction.REMOVE, KEY, null, correctResponseCallback, getServerAddresses());
+        // Wait for response
+        ThreadUtils.sleep(5000L);
+        assertEquals(responseReceived, 1);
+
+        nodes[0].restart();
+        ThreadUtils.sleep(5000L);
+        Assert.assertFalse(nodes[0].getStateMachine().containsKey(KEY));
+    }
+
+    private String[] getServerAddresses() {
+        String[] serverAddresses = new String[2];
+        serverAddresses[0] = String.format("localhost:%s", currentPort - 1);
+        serverAddresses[1] = String.format("localhost:%s", currentPort - 2);
+        return serverAddresses;
     }
 
     private ClientCallback correctResponseCallback = new ClientCallback() {
