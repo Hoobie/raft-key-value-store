@@ -1,5 +1,6 @@
 package pl.edu.agh;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.logging.LogLevel;
 import io.reactivex.netty.channel.Connection;
@@ -13,6 +14,7 @@ import pl.edu.agh.logs.KeyValueStoreAction;
 import pl.edu.agh.logs.LogArchive;
 import pl.edu.agh.logs.LogEntry;
 import pl.edu.agh.messages.RaftMessage;
+import pl.edu.agh.messages.RequestLogs;
 import pl.edu.agh.messages.client.*;
 import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
@@ -79,6 +81,7 @@ public class RaftServer {
                 })
                 .collect(Collectors.toConcurrentMap(Pair::getLeft, Pair::getRight));
 
+        messagesToNeighbors.add(new RequestLogs());
         timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
     }
 
@@ -110,7 +113,7 @@ public class RaftServer {
                                         return stringRepr;
                                     })
                                     .map(MessageUtils::toObject)
-                                    .map(this::handleRequest)
+                                    .map(o -> handleRequest(o, connection))
                                     .filter(Optional::isPresent)
                                     .map(Optional::get)
                                     .map(MessageUtils::toString)
@@ -122,6 +125,17 @@ public class RaftServer {
                         }
                 );
         return tcpServer;
+    }
+
+    private void bringUpToDate(Connection<ByteBuf, ByteBuf> connection) {
+        SocketAddress remoteAddress = connection.getChannelPipeline().channel().remoteAddress();
+        LOGGER.info("Bringing server {} up to date", remoteAddress);
+        logArchive.getCommittedLogs().forEach(log ->
+                connection.writeStringAndFlushOnEach(Observable.just(MessageUtils.toString(new CommitEntry(log))))
+                        .subscribe(
+                                n -> LOGGER.info("CommitEntry {} sent to {} as an update", log, remoteAddress),
+                                e -> LOGGER.error("Error on sending CommitEntry to {}", remoteAddress)
+                        ));
     }
 
     private boolean checkIfClient(Connection<ByteBuf, ByteBuf> connection) {
@@ -138,7 +152,7 @@ public class RaftServer {
         return false;
     }
 
-    private Optional<RaftMessage> handleRequest(Object obj) {
+    private Optional<RaftMessage> handleRequest(Object obj, Connection<ByteBuf, ByteBuf> connection) {
         return Match(obj).of(
                 Case(instanceOf(RequestVote.class), rv -> {
                     boolean granted = false;
@@ -186,6 +200,12 @@ public class RaftServer {
                         return handleClientMessage(cm);
                     return Optional.empty();
                 }),
+                Case(instanceOf(RequestLogs.class), rl -> {
+                    if (state == State.LEADER)
+                        bringUpToDate(connection);
+                    return Optional.empty();
+
+                }),
                 Case($(), o -> Optional.empty())
         );
     }
@@ -198,6 +218,7 @@ public class RaftServer {
 
     private void commitEntry(LogEntry entry) {
         LOGGER.info("Commit entry: " + entry);
+        if (logArchive.containsCommittedLogEntry(entry)) return;
         logArchive.commitEntry(entry);
         switch (entry.getAction()) {
             case SET:
@@ -375,5 +396,19 @@ public class RaftServer {
 
     private int calculateElectionTimeout() {
         return MIN_ELECTION_TIMEOUT_MILLIS + RAND.nextInt(MAX_ELECTION_TIMEOUT_MILLIS - MIN_ELECTION_TIMEOUT_MILLIS);
+    }
+
+    @VisibleForTesting
+    void simulateCrash() {
+        timeout.cancel(true);
+    }
+
+    public Map<String, Integer> getStateMachine() {
+        return keyValueStore;
+    }
+
+    public void restart() {
+        messagesToNeighbors.add(new RequestLogs());
+        timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
     }
 }
