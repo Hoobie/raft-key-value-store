@@ -14,6 +14,7 @@ import pl.edu.agh.logs.KeyValueStoreAction;
 import pl.edu.agh.logs.LogArchive;
 import pl.edu.agh.logs.LogEntry;
 import pl.edu.agh.messages.RaftMessage;
+import pl.edu.agh.messages.RequestLogs;
 import pl.edu.agh.messages.client.*;
 import pl.edu.agh.messages.election.RequestVote;
 import pl.edu.agh.messages.election.VoteResponse;
@@ -80,6 +81,7 @@ public class RaftServer {
                 })
                 .collect(Collectors.toConcurrentMap(Pair::getLeft, Pair::getRight));
 
+        messagesToNeighbors.add(new RequestLogs());
         timeout = TIMEOUT_EXECUTOR.schedule(this::handleTimeout, calculateElectionTimeout(), TimeUnit.MILLISECONDS);
     }
 
@@ -92,7 +94,6 @@ public class RaftServer {
         tcpServer.enableWireLogging("server", LogLevel.DEBUG)
                 .start(connection -> {
                             if (!checkIfClient(connection)) {
-                                bringUpToDate(connection);
                                 SocketAddress remoteAddress = connection.getChannelPipeline().channel().remoteAddress();
                                 if (serverConnections != null) {
                                     Optional<SocketAddress> c = serverConnections.keySet().stream()
@@ -112,7 +113,7 @@ public class RaftServer {
                                         return stringRepr;
                                     })
                                     .map(MessageUtils::toObject)
-                                    .map(this::handleRequest)
+                                    .map(o -> handleRequest(o, connection))
                                     .filter(Optional::isPresent)
                                     .map(Optional::get)
                                     .map(MessageUtils::toString)
@@ -151,7 +152,7 @@ public class RaftServer {
         return false;
     }
 
-    private Optional<RaftMessage> handleRequest(Object obj) {
+    private Optional<RaftMessage> handleRequest(Object obj, Connection<ByteBuf, ByteBuf> connection) {
         return Match(obj).of(
                 Case(instanceOf(RequestVote.class), rv -> {
                     boolean granted = false;
@@ -199,6 +200,12 @@ public class RaftServer {
                         return handleClientMessage(cm);
                     return Optional.empty();
                 }),
+                Case(instanceOf(RequestLogs.class), rl -> {
+                    if (state == State.LEADER)
+                        bringUpToDate(connection);
+                    return Optional.empty();
+
+                }),
                 Case($(), o -> Optional.empty())
         );
     }
@@ -211,6 +218,7 @@ public class RaftServer {
 
     private void commitEntry(LogEntry entry) {
         LOGGER.info("Commit entry: " + entry);
+        if (logArchive.containsCommittedLogEntry(entry)) return;
         logArchive.commitEntry(entry);
         switch (entry.getAction()) {
             case SET:

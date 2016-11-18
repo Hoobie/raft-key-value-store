@@ -63,4 +63,8 @@ public class LogArchive {
     public List<LogEntry> getCommittedLogs() {
         return committedEntries;
     }
+
+    public boolean containsCommittedLogEntry(LogEntry entry) {
+        return committedEntries.stream().filter(e -> e.getId() == entry.getId()).count() > 0;
+    }
 }
