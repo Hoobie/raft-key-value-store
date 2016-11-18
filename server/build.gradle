@@ -1,22 +1,46 @@
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+
 dependencies {
     compile project(':common')
     compile group: 'io.javaslang', name: 'javaslang', version: '2.0.4'
 }
 
-task runServer1 (type: JavaExec) {
+task runSingleNodeServer(type: JavaExec) {
+    args 'localhost:8080'
+    main = "pl.edu.agh.RaftServer"
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+task runServer1(type: JavaExec) {
     args 'localhost:12345', 'localhost:12346', 'localhost:12347'
     main = "pl.edu.agh.RaftServer"
     classpath = sourceSets.main.runtimeClasspath
 }
 
-task runServer2 (type: JavaExec) {
+task runServer2(type: JavaExec) {
     args 'localhost:12346', 'localhost:12345', 'localhost:12347'
     main = "pl.edu.agh.RaftServer"
     classpath = sourceSets.main.runtimeClasspath
 }
 
-task runServer3 (type: JavaExec) {
+task runServer3(type: JavaExec) {
     args 'localhost:12347', 'localhost:12345', 'localhost:12346'
     main = "pl.edu.agh.RaftServer"
     classpath = sourceSets.main.runtimeClasspath
+}
+
+class RunAsyncTask extends DefaultTask {
+    String taskToExecute = '<TaskName>'
+
+    @TaskAction
+    def startAsync() {
+        ExecutorService es = Executors.newSingleThreadExecutor()
+        es.submit({ taskToExecute.execute() } as Callable)
+    }
+}
+
+task stage(type: RunAsyncTask) {
+    taskToExecute = 'runSingleNodeServer'
 }

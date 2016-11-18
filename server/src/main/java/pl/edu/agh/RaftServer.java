@@ -70,6 +70,9 @@ public class RaftServer {
     }
 
     public RaftServer(String host, int port, String... serversHostsAndPorts) {
+        if (serversHostsAndPorts.length == 0)
+            state = State.LEADER;
+
         createTcpServer(port);
         this.localAddress = new InetSocketAddress(host, port);
 
