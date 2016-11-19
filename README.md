@@ -1,4 +1,5 @@
 ##This is a project prepared for Distributed Systems Engineering Class on AGH University of Technology
+Only for educational purposes.
 
 Travis CI: ![Travis CI] (https://api.travis-ci.org/Hoobie/raft-key-value-store.svg)
 
@@ -18,11 +19,11 @@ Running one of specified clients
 
 `./gradlew runSetClient`
 
-OR
+or
 
 `./gradlew runGetClient`
 
-OR
+or
 
 `./gradlew runRemoveClient`
 
